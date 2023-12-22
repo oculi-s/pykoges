@@ -1,0 +1,9 @@
+README.md
+setup.py
+pykoges/__init__.py
+pykoges/_class.py
+pykoges/_namemap.py
+pykoges.egg-info/PKG-INFO
+pykoges.egg-info/SOURCES.txt
+pykoges.egg-info/dependency_links.txt
+pykoges.egg-info/top_level.txt

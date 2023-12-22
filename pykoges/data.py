@@ -1,7 +1,7 @@
 import json, os, inspect
 
 
-def parsePath(path):
+def _parsePath(path):
     name = path.split("/")[-1]
     name, _ = os.path.splitext(name)
     file_type, data_type, year = name.split("_")
@@ -37,7 +37,7 @@ class Question:
         self.answer[answer.code] = answer.text
 
     def add_fileinfo(self, filePath):
-        file_type, data_type, year = parsePath(filePath)
+        file_type, data_type, year = _parsePath(filePath)
         self.data_type = data_type
         self.year = year
 

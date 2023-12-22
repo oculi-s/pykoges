@@ -33,7 +33,7 @@
 - `append` 메서드는 새로운 환자 객체를 리스트에 추가합니다.
 - `has_patient` 메서드는 특정 환자 객체가 리스트에 있는지 여부를 반환합니다.
 
-## 2. 사용 예시
+### 사용 예시
 
 ```python
 # 사용 예시
@@ -50,38 +50,38 @@ p = Patients(patients_list)
 selected_questions = q.from_type("baseline", 2022)
 
 # 특정 코드를 가진 질문 객체 추출
-specific_question = q.has_code("abc123")
+specific_question = q.has_code("muscle")
 
 # 특정 텍스트를 포함하는 질문 객체 추출
 text_related_question = q.has_text("사용자 만족도 조사")
 
 # 새로운 환자 객체를 리스트에 추가
-new_patient = Patient({"name": "John Doe", "birthday": "19900101", "socialno1": "123456"})
+new_patient = Patient({"name": "Kim HyunSik", "birthday": "19980604", "socialno1": "980604"})
 p.append(new_patient)
 
 # 특정 환자 객체가 리스트에 있는지 여부 확인
 has_specific_patient = p.has_patient(new_patient)
 ```
 
-## 1. codingbook 하위모듈
+## 2. codingbook 하위모듈
 
-### 1.1 `readFromCsv(filePath)`
+### 2.1 `readFromCsv(filePath)`
 - 주어진 CSV 파일을 읽어서 openpyxl의 Workbook 형식으로 반환합니다.
 
-### 1.2 `readCodingBook(filePath)`
+### 2.2 `readCodingBook(filePath)`
 - 주어진 CSV 파일에서 질문과 답변을 추출하여 Question 객체를 생성합니다.
 - Question 객체는 `pykoges` 라이브러리의 `Question` 클래스의 인스턴스입니다.
 - 파일 정보를 추가하고, 전체 질문 목록에 추가합니다.
 
-### 1.3 `readCodingBooks(path="./data_fixed")`
+### 2.3 `readCodingBooks(path="./data_fixed")`
 - 지정된 폴더에서 "codingbook"이 포함된 파일들을 찾아 `readCodingBook`을 호출하여 질문 데이터를 읽습니다.
 - 결과로 `Questions` 클래스의 인스턴스를 반환합니다.
 
-### 1.4 `printInitResult(q)`
+### 2.4 `printInitResult(q)`
 - 분석 결과를 출력하는 함수입니다.
 - Markdown 형식으로 출력되며, 실행 결과에는 전체 질문 개수, 코드 중복 제거 후 개수, 객관식과 주관식 데이터 개수, 연도별 질문 개수 등이 포함됩니다.
 
-## 2. 실행 결과 예시
+## 실행 결과 예시
 
 ```python
 # 예시 데이터

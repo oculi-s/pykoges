@@ -1,1 +1,6 @@
 __pycache__/
+data_fixed/
+data/
+dist/
+build/
+*.egg-info/

@@ -1,22 +1,17 @@
-import csv, os, openpyxl
-from pykoges.data import Question, Questions
-from IPython.display import display, Markdown
+@staticmethod
+def __readCodingBook(filePath):
+    from pykoges.datatype import Question
+    import csv, openpyxl
 
-
-def readFromCsv(filePath):
+    questions_list = []
+    # 파일읽기
     wb = openpyxl.Workbook()
     db = wb.active
     with open(filePath, encoding="utf-8") as f:
         reader = csv.reader(f, delimiter=",", quotechar='"')
         for row in reader:
             db.append(row)
-    return db
 
-
-def readCodingBook(filePath):
-    questions_list = []
-    # 파일읽기
-    db = readFromCsv(filePath)
     question = None
     # 열의 개수가 1이상이고 두번째 행, 첫번째 열의 데이터가 존재하는 경우
     if db.max_column > 0 and db.max_row > 0:
@@ -41,52 +36,29 @@ def readCodingBook(filePath):
     return questions_list
 
 
-def readCodingBooks(path="./data_fixed"):
+def read(folderName):
+    from pykoges.datatype import Questions
+    from tqdm.notebook import tqdm
+    import os
+
+    folder = os.path.abspath(folderName)
+    if not os.path.exists(folder):
+        raise FileExistsError("파일을 읽어올 경로가 존재하지 않습니다.\n폴더 이름을 다시 설정해주세요.")
     # 중복실행을 대비해 초기 변수들을 비워줍니다.
     questions_list = []
-    # 'data_fixed' 폴더에 있는 데이터를 로드
-    for x in os.listdir(path):
+    # 확장자가 없거나 (폴더)
+    # 엑셀을 실행시켰을 때 생기는 임시파일 (~$...)인경우 통과
+    files = filter(
+        lambda x: os.path.splitext(x)[1]
+        and not x.startswith("~")
+        and "codingbook" in os.path.splitext(x)[0],
+        os.listdir(folder),
+    )
+    for x in tqdm(list(files), desc="코딩북 읽어오는중..."):
         # 파일 확장자 분리
         name, ext = os.path.splitext(x)
-
-        # 확장자가 없거나 (폴더)
-        # 엑셀을 실행시켰을 때 생기는 임시파일 (~$...)인경우 통과
-        if not ext or "~$" in name:
-            continue
-
-        filePath = os.path.join(path, x)
+        filePath = os.path.join(folder, x)
         # 코딩북인경우 readCodingBook실행
         if "codingbook" in name:
-            questions_list += readCodingBook(filePath)
-    return Questions(questions_list)
-
-
-def printInitResult(q):
-    res = "#### 실행결과  "
-    year_list = sorted(set(q.year))
-    res += f"""
-***
-#### 1. 전체 질문데이터
-***
-- 전체 질문 데이터 **{len(q.list)}**개
-- 코드 중복 제거시 **{len(set(q.valid_code))}**개
-- 객관식 데이터 **{len([x for x in q.list if x.answer])}**개 / 주관식 데이터 **{len([x for x in q.list if not x.answer])}**개
-- 연도별 질문 개수
-
-"""
-    res += f"""
-||{'|'.join(year_list)}|  
-|:-:|{':-:|'*len(year_list)}  
-|baseline 질문 수|{'|'.join([str(q.from_type('baseline', year).len) for year in year_list])}|  
-|track 질문 수|{'|'.join([str(q.from_type('track', year).len) for year in year_list])}|  
-"""
-    res += f"""
-***
-#### 3. 예시 데이터
-***
-- 질문 데이터
-```json
-{q.list[8].to_json()}
-```
-"""
-    display(Markdown(res))
+            questions_list += __readCodingBook(filePath)
+    return Questions(questions_list, folderName=folderName)

@@ -5,14 +5,14 @@
 원주의과대학의 Koges-Arirang 데이터에 특화되어 있습니다.
 
 ```
-pip install koges
+pip install pykoges
 ```
 
 ```python
-from koges import codingbook, koges
+from pykoges import codingbook, koges
 ```
 
-## koges.datatype
+## pykoges.datatype
 
 ### `Question` 클래스
 - 설문지 질문과 관련된 정보를 담은 클래스입니다.
@@ -41,7 +41,7 @@ from koges import codingbook, koges
 - `append` 메서드는 새로운 환자 객체를 리스트에 추가합니다.
 - `has_patient` 메서드는 특정 환자 객체가 리스트에 있는지 여부를 반환합니다.
 
-## koges.codingbook
+## pykoges.codingbook
 
 ### `read(folderName="./data_fixed")`
 - 지정된 폴더에서 "codingbook"이 포함된 파일들을 찾아 `readCodingBook`을 호출하여 질문 데이터를 읽습니다.

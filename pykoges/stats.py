@@ -1,10 +1,23 @@
+__all__ = [
+    "normality",
+    "homogenity",
+    "t_test",
+    "anova",
+    "split",
+    "summary",
+    "boxplot",
+    "correlation",
+    "scatter",
+]
+
+
 def normality(
     koges,
     p_threshold=0.05,
     isdisplay=True,
 ):
+    from .__koges import KogesData
     from scipy import stats
-    from pykoges.koges import KogesData
 
     _kg = KogesData.copy(koges)
 
@@ -44,8 +57,8 @@ def homogenity(
     koges,
     p_threshold=0.05,
 ):
+    from .__koges import KogesData
     from scipy import stats
-    from pykoges.koges import KogesData
 
     if not _kg.n_class:
         return
@@ -74,10 +87,10 @@ def homogenity(
 
 
 def t_test(koges, p_threshold=0.05):
+    from .__koges import KogesData
+    from .utils import iscontinuous, name_map
+
     from scipy import stats
-    from pykoges.koges import KogesData
-    from pykoges.utils import iscontinuous
-    from pykoges.__map import _name_map
     import pandas as pd
 
     # T-test, 두개 class
@@ -102,22 +115,21 @@ def t_test(koges, p_threshold=0.05):
             new_x.append(x)
         summary.append(row + [p_value])
 
-    _kg.data = pd.concat(_kg.datas.values())
+    _kg.x = sorted(new_x)
     _kg.data = _kg.data[_kg.x + [_kg.y[0]]]
     print("-----------------------")
     print(f"유효변수 {len(_kg.x)}개")
-    print(", ".join(pd.Series(_kg.x).replace(_name_map)))
+    print(", ".join(pd.Series(_kg.x).replace(name_map)))
 
-    _kg.x = sorted(new_x)
     _kg.summary = summary
     return _kg
 
 
 def anova(koges, p_threshold=0.05):
+    from .__koges import KogesData
+    from .utils import iscontinuous, name_map
+
     from scipy import stats
-    from pykoges.koges import KogesData
-    from pykoges.utils import iscontinuous
-    from pykoges.__map import _name_map
     import pandas as pd
 
     # ANOVA, 여러 class
@@ -147,13 +159,12 @@ def anova(koges, p_threshold=0.05):
             new_x.append(x)
         summary.append(row + [p_value])
 
-    _kg.data = pd.concat(_kg.datas.values())
+    _kg.x = sorted(new_x)
     _kg.data = _kg.data[_kg.x + [_kg.y[0]]]
     print("-----------------------")
     print(f"유효변수 {len(_kg.x)}개")
-    print(", ".join(pd.Series(_kg.x).replace(_name_map)))
+    print(", ".join(pd.Series(_kg.x).replace(name_map)))
 
-    _kg.x = sorted(new_x)
     _kg.summary = summary
     return _kg
 
@@ -164,8 +175,9 @@ def split(
     p_threshold=0.05,
     with_normality=False,
     with_homogenity=False,
+    isdisplay=True,
 ):
-    from pykoges.koges import KogesData, split_data
+    from .__koges import KogesData, kogesclass
 
     _kg = KogesData.copy(koges)
     if _kg.data.empty:
@@ -177,7 +189,7 @@ def split(
     if with_normality:
         _kg = normality(_kg, p_threshold=p_threshold)
     # 2. 데이터 분리
-    _kg = split_data(_kg, n_class=n_class)
+    _kg = kogesclass.split_data(_kg, n_class=n_class, isdisplay=isdisplay)
     # 3. 등분산성 검정
     if with_homogenity:
         _kg = homogenity(_kg, p_threshold=p_threshold)
@@ -185,11 +197,9 @@ def split(
     return _kg
 
 
-def summary(
-    koges,
-    isdisplay=True,
-):
-    from pykoges.__map import _name_map
+def summary(koges, isdisplay=True):
+    from .utils import name_map
+
     from IPython.display import display, HTML
     import pandas as pd
 
@@ -202,7 +212,7 @@ def summary(
     )
     index, summary = summary.iloc[:, 0], summary.iloc[:, 1:]
     summary.columns = list(_kg.columns)
-    summary.index = list(index.replace(_name_map))
+    summary.index = list(index.replace(name_map))
     summary = summary.style.set_table_styles(
         [dict(selector="th", props=[("text-align", "center"), ("white-space", "pre")])]
     )
@@ -213,22 +223,21 @@ def summary(
         display(HTML(summary.to_html()))
 
 
-def boxplot(
-    koges,
-    isdisplay=True,
-):
-    from pykoges.koges import KogesData
-    from pykoges.utils import isdiscrete
-    from pykoges.__map import _name_map
+def boxplot(koges, isdisplay=True):
+    from .utils import isdiscrete
+    from .utils import name_map
+
     import seaborn as sns
     import matplotlib.pyplot as plt
 
+    sns.set(font="Malgun Gothic")
     plt.rcParams["font.family"] = "Malgun Gothic"
     plt.rcParams["axes.unicode_minus"] = False
 
     _kg = koges
     col = min(8, len(_kg.x))
     row = (len(_kg.x) + col - 1) // col
+    plt.ioff()
     boxplot, ax = plt.subplots(
         nrows=row,
         ncols=col,
@@ -242,7 +251,7 @@ def boxplot(
             df_list.append(list(_kg.datas[i][x]))
         plt.subplot(row, col, _ + 1)
         sns.boxplot(data=df_list, palette="Set3", showfliers=False)
-        plt.xlabel(_name_map.get(x, x))
+        plt.xlabel(name_map.get(x, x))
         if _kg.n_class == 2:
             plt.xticks(range(_kg.n_class), ["(-)", "(+)"])
         elif isdiscrete(_kg.q, _kg.y[0]):
@@ -254,12 +263,14 @@ def boxplot(
         print("-----------------------")
         print("BoxPlot")
         plt.show()
+    plt.close()
 
     _kg.SAVE["boxplot"] = boxplot
 
 
+@staticmethod
 def __correlation_key(koges):
-    from pykoges.utils import isdiscrete, isbinary
+    from .utils import isdiscrete, isbinary
 
     # 연속변수를 기준으로 correlation구함
     for x in [koges.y[0]] + koges.x:
@@ -270,12 +281,13 @@ def __correlation_key(koges):
     return koges.y[0]
 
 
-def correlation(koges):
-    from pykoges.utils import iscontinuous, arr_to_df_split
-    from pykoges.__map import _name_map
+def correlation(koges, isdisplay=True):
+    from .utils import iscontinuous, arr_to_df_split
+    from .utils import name_map
+
     from IPython.display import display
-    import seaborn as sns
     import pandas as pd
+    import seaborn as sns
     import matplotlib.pyplot as plt
 
     sns.set(font="Malgun Gothic")
@@ -290,30 +302,37 @@ def correlation(koges):
     df = _kg.data[keys]
     y = _kg.y[0]
     if iscontinuous(_kg.q, y):
-        key = __correlation_key(y)
+        key = __correlation_key(_kg)
         corr = (
             pd.DataFrame(df.corr(method="pearson")[key])
             .drop([key], axis=0)
             .sort_values(by=key, ascending=False)
             .T
         )
-        dcorr = corr.rename(index=_name_map, columns=_name_map).T.reset_index()
-        dcorr = arr_to_df_split(dcorr.values, column=["", _name_map.get(key, key)])
-        display(dcorr)
+        dcorr = corr.rename(index=name_map, columns=name_map).T.reset_index()
+        dcorr = arr_to_df_split(dcorr.values, column=["", name_map.get(key, key)])
+        if isdisplay:
+            display(dcorr)
         _kg.SAVE["correlation"] = dcorr
     else:
+        plt.ioff()
         fig = plt.figure(figsize=(6, 5))
         corr = df.corr(method="pearson").abs()
-        sns.heatmap(corr.rename(index=_name_map, columns=_name_map))
+        if isdisplay:
+            sns.heatmap(corr.rename(index=name_map, columns=name_map))
+            plt.show()
+        plt.close()
         _kg.SAVE["correlation"] = fig
     _kg.correlation = corr
 
 
-def scatter(koges):
-    from pykoges.utils import iscontinuous
-    from pykoges.__map import _name_map
+def scatter(koges, isdisplay=True):
+    from .utils import iscontinuous, name_map
+
+    import seaborn as sns
     import matplotlib.pyplot as plt
 
+    sns.set(font="Malgun Gothic")
     plt.rcParams["font.family"] = "Malgun Gothic"
     plt.rcParams["axes.unicode_minus"] = False
 
@@ -325,24 +344,26 @@ def scatter(koges):
 
     # 가로 8칸에 scatter plot
     keys = [x for x in _kg.correlation if iscontinuous(_kg.q, x) and x != key]
-    col = min(8, len(keys) - 1)
-    row = (len(keys) + col - 1) // col
+    ncol = max(min(8, len(keys) - 1), 2)
+    nrow = max((len(keys) + ncol - 1) // ncol, 1)
+    plt.ioff()
     fig, axis = plt.subplots(
-        nrows=row,
-        ncols=col,
-        figsize=(col * 1.8, row * 2),
+        nrows=nrow,
+        ncols=ncol,
+        figsize=(ncol * 1.8, nrow * 2),
         constrained_layout=True,
         sharey=True,
     )
 
     for i, x in enumerate(keys):
-        plt.subplot(row, col, i + 1)
+        plt.subplot(nrow, ncol, i + 1)
         plt.scatter(_kg.data[x], _kg.data[key], alpha=0.1)
         # plt.title(f'{x} - {y_code}')
-        plt.xlabel(_name_map.get(x, x))
+        plt.xlabel(name_map.get(x, x))
 
-    fig.supylabel(_name_map.get(key, key))
+    fig.supylabel(name_map.get(key, key))
     fig.suptitle("Scatter plot")
-    plt.show()
-
+    if isdisplay:
+        plt.show()
+    plt.close()
     _kg.SAVE["scatter"] = fig

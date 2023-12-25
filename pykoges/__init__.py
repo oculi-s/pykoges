@@ -1,33 +1,19 @@
-from .datatype import Answer, Patient, Patients, Question, Questions
-from .codingbook import read
-from .koges import *
-from .stats import *
+from pykoges import __codingbook, __koges, __learn, stats, utils
+
+codingbook = __codingbook.codingbook
+
+koges = __koges.kogesclass
+koges.Variables = __koges.Variables
+
+model = __learn.modelclass
+
 
 __all__ = [
-    "Answer",
-    "Patient",
-    "Patients",
-    "Question",
-    "Questions",
-    #
-    "read",
-    "summary",
+    "codingbook",
     "koges",
     "stats",
+    "utils",
+    "model",
 ]
-codingbook.__all__ = ["read"]
-koges.__all__ = [
-    "read",
-    "convert",
-    "drop",
-    "split_data",
-]
-stats.__all__ = [
-    "normality",
-    "homogenity",
-    "split",
-    "summary",
-    "anova",
-    "t_test",
-    "boxplot",
-]
+
+del __codingbook, __koges, __learn

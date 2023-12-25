@@ -80,13 +80,13 @@ class Questions:
     def __init__(
         self,
         lst=None,
-        folderName="./data_fixed",
+        folder_name="./data_fixed",
     ):
         import os
 
         self.list = lst if lst is not None else []
         self.len = len(self.list)
-        self.folder = os.path.abspath(folderName)
+        self.folder = os.path.abspath(folder_name)
 
     def keys(self, reverse=True, astype=list):
         import os

@@ -3,7 +3,9 @@ __all__ = ["modelclass"]
 
 class modelclass:
     def __init__(
-        self, koges, scalers=["minmax", "robust", "standard", "maxabs"]
+        self,
+        koges,
+        scalers=["minmax", "robust", "standard", "maxabs"],
     ) -> None:
         from sklearn.preprocessing import (
             MinMaxScaler,
@@ -20,6 +22,7 @@ class modelclass:
         }
         self.koges = koges
         self.scalers = [v for k, v in _scalers.items() if k in scalers]
+        self.model = None
 
     @staticmethod
     def __scale(koges, scaler):

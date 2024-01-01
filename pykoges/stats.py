@@ -93,6 +93,8 @@ def t_test(koges, p_threshold=0.05):
     from scipy import stats
     import pandas as pd
 
+    if not hasattr(koges, "datas"):
+        return ValueError("binary dataset이 정의되지 않았습니다.")
     # T-test, 두개 class
     _kg = KogesData.copy(koges)
     new_x, summary = [], []
@@ -117,6 +119,8 @@ def t_test(koges, p_threshold=0.05):
 
     _kg.x = sorted(new_x)
     _kg.data = _kg.data[_kg.x + [_kg.y[0]]]
+    for key in _kg.datas.keys():
+        _kg.datas[key] = _kg.datas[key][_kg.x + [_kg.y[0]]]
     print("-----------------------")
     print(f"유효변수 {len(_kg.x)}개")
     print(", ".join(pd.Series(_kg.x).replace(name_map)))
@@ -131,6 +135,9 @@ def anova(koges, p_threshold=0.05):
 
     from scipy import stats
     import pandas as pd
+
+    if not hasattr(koges, "datas"):
+        return ValueError("multiclass dataset이 정의되지 않았습니다.")
 
     # ANOVA, 여러 class
     _kg = KogesData.copy(koges)
@@ -176,6 +183,8 @@ def split(
     with_normality=False,
     with_homogenity=False,
     isdisplay=True,
+    custom_split={},
+    dispaly_y="",
 ):
     from .__koges import KogesData, kogesclass
 
@@ -189,7 +198,13 @@ def split(
     if with_normality:
         _kg = normality(_kg, p_threshold=p_threshold)
     # 2. 데이터 분리
-    _kg = kogesclass.split_data(_kg, n_class=n_class, isdisplay=isdisplay)
+    _kg = kogesclass.split_data(
+        _kg,
+        n_class=n_class,
+        isdisplay=isdisplay,
+        custom_split=custom_split,
+        display_y=dispaly_y,
+    )
     # 3. 등분산성 검정
     if with_homogenity:
         _kg = homogenity(_kg, p_threshold=p_threshold)
@@ -197,22 +212,37 @@ def split(
     return _kg
 
 
-def summary(koges, isdisplay=True):
-    from .utils import name_map
+def summary(
+    koges,
+    isdisplay=True,
+    p_threshold=0.05,
+):
+    from .utils import name_map, isfloat
 
     from IPython.display import display, HTML
-    import pandas as pd
+    import pandas as pd, numpy as np
 
     _kg = koges
     # p-value를 기준으로 정렬하고 1e-3보다 작은 경우를 대체합니다.
     summary = pd.DataFrame(_kg.summary)
     summary = summary.sort_values(by=summary.columns[-1])
-    summary.iloc[:, -1] = summary.iloc[:, -1].apply(
-        lambda p: "< 0.001" if p < 0.001 else f"{p:.3f}"
-    )
     index, summary = summary.iloc[:, 0], summary.iloc[:, 1:]
     summary.columns = list(_kg.columns)
     summary.index = list(index.replace(name_map))
+    idx = np.argmin(np.abs(summary.iloc[:, -1] - p_threshold)) + 1
+    if idx < summary.shape[0]:
+        summary = pd.concat(
+            [
+                summary.iloc[:idx],
+                pd.DataFrame(
+                    [[""] * summary.shape[1]], columns=summary.columns, index=[""]
+                ),
+                summary.iloc[idx:],
+            ]
+        )
+    summary.iloc[:, -1] = summary.iloc[:, -1].apply(
+        lambda p: ("< 0.001" if p < 0.001 else f"{p:.3f}") if p else p
+    )
     summary = summary.style.set_table_styles(
         [dict(selector="th", props=[("text-align", "center"), ("white-space", "pre")])]
     )

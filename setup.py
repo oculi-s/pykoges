@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="pykoges",
-    version="0.3.5",
+    version="0.4.2",
     packages=find_packages(),
     install_requires=[
         "openpyxl",
@@ -12,13 +12,12 @@ setup(
         "pandas",
         "numpy",
         "seaborn",
-        "torch",
+        "matplotlib",
         "scipy",
         "scikit-learn",
-        "matplotlib",
         "statsmodels",
         "tabulate",
-        "dataframe_image",
+        "dataframe_image==0.2.3",
     ],
     entry_points={},
     author="oculis",

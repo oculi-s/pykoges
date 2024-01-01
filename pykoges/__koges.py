@@ -160,7 +160,7 @@ class KogesData:
 
         y = self.y[0]
         d = os.path.join("./result", f'{self.SAVE["time"]}_{y.upper()}')
-        if not os.path.exists(d):
+        if not os.path.exists(d) and issave:
             os.makedirs(d, exist_ok=True)
 
         o = self.option
@@ -175,6 +175,7 @@ class KogesData:
             "waist_hip_ratio",
             "fev_fvc_ratio",
             "grip_of_grwhich",
+            "abi_of_grwhich",
             "weight_height_bmi",
         ]
         option = [["이름", "옵션"], *[[k, o.get(k, "-")] for k in keys]]
@@ -213,7 +214,7 @@ class KogesData:
             "count",
             "importance",
         ]
-        if "equation" in self.SAVE:
+        if "equation" in self.SAVE and issave:
             with open(os.path.join(d, "equation.tex"), "w", encoding="utf-8") as f:
                 f.write(self.SAVE["equation"])
         i = 0
@@ -398,6 +399,7 @@ class kogesclass:
         waist_hip_ratio=False,
         fev_fvc_ratio=False,
         grip_of_grwhich=True,
+        abi_of_grwhich=True,
         weight_height_bmi=False,
         custom_functions=[],
     ):
@@ -415,6 +417,7 @@ class kogesclass:
         _kg.option["waist_hip_ratio"] = waist_hip_ratio
         _kg.option["fev_fvc_ratio"] = fev_fvc_ratio
         _kg.option["grip_of_grwhich"] = grip_of_grwhich
+        _kg.option["abi_of_grwhich"] = abi_of_grwhich
         _kg.option["weight_height_bmi"] = weight_height_bmi
         _kg.option["custom_functions"] = custom_functions
 
@@ -462,7 +465,7 @@ class kogesclass:
                 if "fev1" in _kg.y or "fvc" in _kg.y:
                     _kg.y = ["fev1fvc"]
 
-        # 5. 자주 사용하는 손의 악력만을 가져옵니다.
+        # 5. 자주 사용하는 손 방향의 악력과 ABI만을 가져옵니다.
         if grip_of_grwhich:
             if "gripl1" in df and "gripr1" in df and "grwhich" in df:
                 isright = df["grwhich"] == df["grwhich"].min()
@@ -471,6 +474,37 @@ class kogesclass:
                 if "gripl1" in _kg.y or "grwhich" in _kg.y:
                     _kg.y = ["grip"]
                     _kg.type = "continuous"
+        if abi_of_grwhich:
+            if "grwhich" in df and "labi" in df and "rabi" in df:
+                isright = df["grwhich"] == df["grwhich"].min()
+                df["abi"] = np.where(isright, df["rabi"], df["labi"])
+                drop_list += ["labi", "rabi", "grwhich"]
+                if "labi" in _kg.y and "rabi" in _kg.y:
+                    _kg.y = ["abi"]
+                    _kg.type = "continuous"
+
+        # 흡연, 음주
+        if "smam" in df:
+            df = df[(df["smam"] != 99)]
+            if "smdudy" in df and "smdumo" in df and "smduyr" in df:
+                df = df[
+                    (df["smdudy"] != 99) & (df["smdumo"] != 99) & (df["smduyr"] != 99)
+                ]
+                df["smokepy"] = (df["smam"] / 20) * (
+                    df["smdudy"] / 365 + df["smdumo"] / 12 + df["smduyr"]
+                )
+                drop_list += ["smam", "smdudy", "smdumo", "smduyr"]
+            elif "smdu" in df:
+                df = df[(df["smdu"]) != 99]
+                df["smokepy"] = (df["smam"] / 20) * (df["smdu"])
+                drop_list += ["smam", "smdu"]
+        if "drinkfq" in df and "drinkam" in df:
+            df = df[(df["drinkfq"] != 9) & (df["drinkam"] != 999)]
+            df["drinkfq"] = df["drinkfq"].replace(
+                {1: 0.25, 2: 0.42, 3: 1, 4: 2.5, 5: 5, 6: 7, 7: 14}
+            )
+            df["drinkaw"] = df["drinkfq"] * df["drinkam"]
+            drop_list += ["drinkfq", "drinkam"]
 
         # 6. 기타 함수로 나타낼 항목
         for x, f in custom_functions:
@@ -486,13 +520,14 @@ class kogesclass:
                 drop_list += x
                 if set(x).issubset(_kg.y):
                     _kg.y = [c]
+
         _kg.data = df.drop(set(drop_list), axis=1)
         return _kg
 
     def drop(
         koges: KogesData,
         drop_threshold=0.3,
-        filter_alpha=2,
+        filter_alpha=float("inf"),
         data_impute=False,
         display_result=True,
         display_count=True,
@@ -514,7 +549,7 @@ class kogesclass:
         # 새로 생성된 변수에 대해 Questions에 추가해줍니다.
         for x in df:
             if not _kg.q.has_code(x).len:
-                question = Question(survey_code=f"_{x}", answer=[])
+                question = Question(survey_code=f"_{x}")
                 _kg.q.list.append(question)
 
         # 결측치를 KNN알고리즘으로 채워줍니다.
@@ -539,31 +574,32 @@ class kogesclass:
 
         # 결측치를 처리한 경우 제거된 결측치가 없으므로 출력하지 않습니다.
         result = [
-            [None, "데이터", "비율", "변수"],
+            ["", "데이터", "비율", "변수"],
             ["전체 데이터", n, "100%", len(df.columns)],
             [
                 "Y값 결측치 제거",
                 n1 - n,
                 f"{int((n1-n)/n*100)}%",
-                len(df_y.columns) - len(df.columns),
+                (len(df_y.columns) - len(df.columns)) or "",
             ],
             [
                 f"결측치 {int(drop_threshold*100)}% 이상인\n입력변수 제거",
                 "",
                 "",
-                len(df_var.columns) - len(df_y.columns),
+                (len(df_var.columns) - len(df_y.columns)) or "",
             ],
             [
                 "결측치 제거",
                 n2 - n,
                 f"{int((n2-n)/n*100)}%",
-                len(df_drop.columns) - len(df_var.columns),
+                (len(df_drop.columns) - len(df_var.columns)) or "",
             ],
-            [
+            filter_alpha != float("inf")
+            and [
                 f"{filter_alpha}SD 초과제거",
                 n3 - n2,
                 f"{int((n3-n2)/n*100)}%",
-                len(df_sdfilter.columns) - len(df_drop.columns),
+                (len(df_sdfilter.columns) - len(df_drop.columns)) or "",
             ],
             [
                 "최종데이터",
@@ -572,7 +608,7 @@ class kogesclass:
                 len(df_sdfilter.columns),
             ],
         ]
-        result = arr_to_df(result)
+        result = arr_to_df([x for x in result if x])
         result = result.style.set_table_styles(
             [dict(selector="th", props=[("white-space", "pre")])]
         )
@@ -609,6 +645,7 @@ class kogesclass:
         convert={},
         isdisplay=True,
     ):
+        import json
         import pandas as pd
         from IPython.display import display
 
@@ -624,7 +661,7 @@ class kogesclass:
         # 답변을 코드:답변내용과 답변내용:코드로 모아줍니다.
         ans, ans_rev = {}, {}
         for answer in _kg.q.has_code("code1").answer:
-            for k, v in answer.items():
+            for k, v in json.loads(answer).items():
                 if not isinstance(k, int) and not k.isnumeric():
                     continue
                 ans[int(k)] = v
@@ -681,6 +718,8 @@ class kogesclass:
         koges,
         n_class=4,
         isdisplay=True,
+        custom_split={},
+        display_y="",
     ):
         import pandas as pd
         from pykoges.utils import ekg_map, name_map
@@ -696,8 +735,27 @@ class kogesclass:
             if _kg.type == "binary":
                 n_class = 2
                 # binary는 양성/음성으로 분리
-                classes = ["정상", "비정상"]
+                classes = ["(-)", "(+)"]
                 datas[0], datas[1] = df[df[y] == 0], df[df[y] == 1]
+            elif custom_split:
+                if len(custom_split.keys()) == 1:
+                    k = list(custom_split.keys())[0]
+                    display_y = k
+                    custom_split["(+)"] = custom_split[k]
+                    del custom_split[k]
+
+                custom_split["(-)"] = lambda x: [True] * len(x)
+
+                n_class = len(custom_split.keys())
+                classes = list(custom_split.keys())
+
+                for i, f in enumerate(custom_split.values()):
+                    if datas.values():
+                        df_remain = pd.concat([df, pd.concat(datas.values())])
+                        df_remain = df_remain.drop_duplicates(keep=False)
+                        datas[i] = df_remain[f(df_remain)]
+                    else:
+                        datas[i] = df[f(df)]
             else:
                 n_class = n_class or 4
                 # 연속은 quantile을 기준으로 분리
@@ -712,7 +770,7 @@ class kogesclass:
                     datas[i][y] = i
             for i in range(n_class):
                 # quan = df[y].quantile(1 / n_class * (i + 1))
-                col_r1 += [f"{y} {classes[i]}\n(n={len(datas[i])})"] * n
+                col_r1 += [f"{display_y or y} {classes[i]}\n(n={len(datas[i])})"] * n
             _kg.classes = classes
             _kg.n_class = n_class
         else:
@@ -733,6 +791,7 @@ class kogesclass:
                 col_r1 += [f"{name_map.get(x,x)}\n(n={len(datas[i])})"] * n
         col_r2 = ["평균", "95%CI"] * n_class + ["p-value"]
 
+        _kg.display_y = display_y
         _kg.columns = [col_r1 + ["H1"], col_r2]
         _kg.datas = datas
         return _kg

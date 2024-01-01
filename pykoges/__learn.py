@@ -13,6 +13,7 @@ class modelclass:
             StandardScaler,
             MaxAbsScaler,
         )
+        import pandas as pd
 
         _scalers = {
             "minmax": MinMaxScaler,
@@ -23,6 +24,13 @@ class modelclass:
         self.koges = koges
         self.scalers = [v for k, v in _scalers.items() if k in scalers]
         self.model = None
+
+        if self.koges.n_class == 2:
+            dfs = []
+            for key, df in self.koges.datas.items():
+                df[self.koges.y[0]] = key
+                dfs.append(df)
+            self.koges.data_binary = pd.concat(dfs)
 
     @staticmethod
     def __scale(koges, scaler):
@@ -68,7 +76,7 @@ class modelclass:
         models, r2s, results = [], [], []
         for i, scaler in enumerate(self.scalers):
             _kg = modelclass.__scale(koges=self.koges, scaler=scaler)
-            X_train, X_test, y_train, y_test = modelclass.__split(self.koges)
+            X_train, X_test, y_train, y_test = modelclass.__split(_kg)
 
             model = LinearRegression()
             model.fit(X_train, y_train)
@@ -144,6 +152,9 @@ class modelclass:
         from .utils import name_map
         import matplotlib.pyplot as plt
 
+        if not hasattr(self.koges, "data_binary"):
+            return ValueError("binary dataset이 정의되지 않았습니다.")
+
         y = self.koges.y[0]
 
         ncol = len(self.scalers)
@@ -159,16 +170,17 @@ class modelclass:
         for i, scaler in enumerate(self.scalers):
             plt.subplot(1, ncol, i + 1)
             _kg = modelclass.__scale(self.koges, scaler=scaler)
-            _kg.data[y] = _kg.data[y].astype(int)
+            _kg.data = _kg.data_binary
+            _kg.data[y] = _kg.data_binary[y].astype(int)
             X_train, X_test, y_train, y_test = modelclass.__split(koges=_kg)
-            model = LogisticRegression()
+            model = LogisticRegression(max_iter=5000)
             model.fit(X_train, y_train)
 
             y_pred_prob = model.predict_proba(X_test)[:, 1]
             fpr, tpr, _ = roc_curve(y_test, y_pred_prob)
             roc_auc = auc(fpr, tpr)
 
-            y_name = name_map.get(y, y)
+            y_name = self.koges.display_y or name_map.get(y, y)
             plt.plot(
                 fpr, tpr, color="grey", lw=2, label=f"ROC curve (auc = {roc_auc:.2f})"
             )
@@ -213,104 +225,26 @@ class modelclass:
         plt.plot([0, 1], [0, 1], "k--", lw=2)
         plt.legend(loc="lower right")
 
-    def classify(self):
-        from sklearn.metrics import accuracy_score, confusion_matrix
-        from .utils import name_map
-
-        import seaborn as sns
-        import matplotlib.pyplot as plt
-        import pandas as pd
-
-        sns.set(font="Malgun Gothic")
-        plt.rcParams["font.family"] = "Malgun Gothic"
-        plt.rcParams["axes.unicode_minus"] = False
-
-        X_train, X_test, y_train, y_test = modelclass.__split(self.koges)
-        model = self.model()
-        model.fit(X_train, y_train)
-        y_pred = model.predict(X_test)
-        accuracy = accuracy_score(y_test, y_pred)
-
-        name = model.__class__.__name__
-        print("----------------------------")
-        print(f"{model.__class__.__name__}")
-        print(f"예측 정확도 : {accuracy*100:.2f}%")
-
-        fig = plt.figure(figsize=(3, 3))
-        conf_matrix = pd.DataFrame(
-            confusion_matrix(y_test, y_pred, labels=range(self.koges.n_class)),
-            index=self.koges.classes,
-            columns=self.koges.classes,
-        )
-        sns.heatmap(
-            conf_matrix.rename(index=name_map, columns=name_map),
-            annot=True,
-            fmt="d",
-            cmap="Blues",
-        )
-        plt.title(name)
-        plt.show()
-
-        self.koges.SAVE[name] = fig
-        self.koges.model = model
-
-    def svmClassifier(koges):
-        from sklearn.metrics import accuracy_score, confusion_matrix
-        from sklearn import svm
-        from .utils import name_map
-
-        import seaborn as sns
-        import matplotlib.pyplot as plt
-        import pandas as pd
-
-        sns.set(font="Malgun Gothic")
-        plt.rcParams["font.family"] = "Malgun Gothic"
-        plt.rcParams["axes.unicode_minus"] = False
-
-        X_train, X_test, y_train, y_test = modelclass.__split(koges)
-        model = svm.SVC(kernel="linear", C=1.0)
-        model.fit(X_train, y_train)
-        y_pred = model.predict(X_test)
-        accuracy = accuracy_score(y_test, y_pred)
-        print("----------------------------")
-        print(f"{model.__class__.__name__}")
-        print(f"예측 정확도 : {accuracy*100:.2f}%")
-
-        plt.figure(figsize=(3, 3))
-        conf_matrix = pd.DataFrame(
-            confusion_matrix(y_test, y_pred, labels=range(koges.n_class)),
-            index=koges.classes,
-            columns=koges.classes,
-        )
-        sns.heatmap(
-            conf_matrix.rename(index=name_map, columns=name_map),
-            annot=True,
-            fmt="d",
-            cmap="Blues",
-        )
-        plt.show()
-        koges.model = model
-
     def softmax(
         self,
         display_roc_curve=True,
         display_confusion_matrix=True,
     ):
         from sklearn.metrics import confusion_matrix, accuracy_score
-        import torch
-        from torch import nn, optim
-        import torch.nn.functional as F
         import pandas as pd
         from pykoges.__koges import KogesData
 
         import seaborn as sns
         import matplotlib.pyplot as plt
+        import numpy as np
 
         sns.set(font="Malgun Gothic")
         plt.rcParams["font.family"] = "Malgun Gothic"
         plt.rcParams["axes.unicode_minus"] = False
+        accuracies, confs = [], []
 
-        models, accuracies, confs = [], [], []
+        if not hasattr(self.koges, "datas"):
+            return ValueError("multiclass dataset이 정의되지 않았습니다.")
 
         ncol = len(self.scalers)
         fig, ax = plt.subplots(
@@ -325,34 +259,40 @@ class modelclass:
         kg.data = pd.concat(self.koges.datas.values())
         for i, scaler in enumerate(self.scalers):
             _kg = modelclass.__scale(kg, scaler=scaler)
-
             X_train, X_test, y_train, y_test = modelclass.__split(_kg)
-            model = nn.Linear(X_train.shape[1], _kg.n_class)
-            optimizer = optim.SGD(model.parameters(), lr=0.01)
 
-            X_tensor = torch.FloatTensor(X_train.values)
-            y_tensor = torch.tensor(y_train.values, dtype=torch.long)
-
+            lr = 0.01
+            _W = np.random.randn(X_train.shape[1], _kg.n_class) / np.sqrt(
+                X_train.shape[1] / 2
+            )
             # model.fit의 과정, n번 학습
-            n = 1000
-            for _ in range(n):
-                cost = F.cross_entropy(model(X_tensor), y_tensor)
-                optimizer.zero_grad()
-                cost.backward()
-                optimizer.step()
+            for _ in range(1000):
+                z = np.dot(X_train, _W)
 
-            X_test_tensor = torch.FloatTensor(X_test.values)
-            prediction = F.softmax(model(X_test_tensor), dim=1)
+                predictions = z - (z.max(axis=1).reshape([-1, 1]))
+                softmax = np.exp(predictions)
+                softmax /= softmax.sum(axis=1).reshape([-1, 1])
 
-            y_pred = torch.argmax(prediction, dim=1)
+                sample_size = y_train.shape[0]
+                cost = -np.log(softmax[np.arange(len(softmax)), y_train]).sum()
+                cost /= sample_size
+                cost += (1e-5 * (_W**2).sum()) / 2
+
+                softmax[np.arange(len(softmax)), y_train] -= 1
+                grad = np.dot(X_train.transpose(), softmax) / sample_size
+                grad += 1e-5 * _W
+
+                _W -= lr * grad
+
+            prediction = np.dot(X_test, _W)
+            y_pred = np.argmax(prediction, 1)
             accuracy = accuracy_score(y_test, y_pred)
 
             plt.subplot(1, ncol, i + 1)
             plt.title(f"{scaler.__name__} (accuracy={accuracy:.2f})")
-            self.muticlassRoc(y_test=y_test, prediction=prediction.detach().numpy())
+            self.muticlassRoc(y_test=y_test, prediction=prediction)
             conf_matrix = confusion_matrix(y_pred, y_test)
 
-            models.append(model)
             accuracies.append(accuracy)
             confs.append(conf_matrix)
 
@@ -383,7 +323,6 @@ class modelclass:
 
         accuracy = max(accuracies)
         conf_matrix = confs[accuracies.index(accuracy)]
-        model = models[accuracies.index(accuracy)]
 
         self.accuracy = accuracy
         self.conf_matrix = conf_matrix
@@ -416,7 +355,7 @@ class modelclass:
             lines.append(f"{w} \\times \\text{{{x}}}")
 
         y = self.koges.y[0]
-        y = name_map.get(y, y)
+        y = self.koges.display_y or  name_map.get(y, y)
         line = "".join(lines)
         if isinstance(self.model, LinearRegression):
             equation = f""" y({y}) = {b} {line}"""

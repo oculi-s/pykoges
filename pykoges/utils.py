@@ -16,25 +16,29 @@ __all__ = [
 
 # 변수가 이진변수인지 확인
 def isbinary(q, code):
+    import json
+
     if code in type_map:
         return type_map[code] == 0
     answer = next(iter(q.has_code(code).answer), None)
     if not answer:
         return False
     # O, X, 무응답
-    keys = answer.keys()
-    return 0 < len(set(keys) - {"0", "9"}) <= 3
+    keys = json.loads(answer).keys()
+    return 0 < len(set(keys) - set(["0", "9"])) <= 3
 
 
 # 변수가 이산변수인지 확인
 def isdiscrete(q, code):
+    import json
+
     if code in type_map:
         return type_map[code] == 1
     answer = next(iter(q.has_code(code).answer), None)
     if not answer:
         return False
-    keys = answer.keys()
-    return len(set(keys) - {"0", "9"}) > 3
+    keys = json.loads(answer).keys()
+    return len(set(keys) - set(["0", "9"])) > 3
 
 
 # 변수가 연속변수인지 확인
@@ -128,6 +132,7 @@ name_map = {
     "height": "키",
     "hip": "엉덩이 둘레",
     "waist": "허리둘레",
+    "abi": "ABI",
     "labi": "ABI(왼쪽)",
     "rabi": "ABI(오른쪽)",
     "ldl": "LDL",
@@ -152,6 +157,8 @@ name_map = {
     "ekg": "EKG",
     "code1": "EKG소견",
     "dm": "당뇨",
+    "smokepy": "흡연량(갑년)",
+    "drinkaw": "주당음주량",
 }
 
 ekg_map = {
@@ -311,4 +318,9 @@ type_map = {
     "wbc": 2,
     "whr": 2,
     "weight": 2,
+    "incell": 2,
+    "excell": 2,
+    "pbf": 2,
+    "smam": 2,
+    "smdu": 2,
 }

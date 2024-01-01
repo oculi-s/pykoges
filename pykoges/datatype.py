@@ -9,7 +9,7 @@ class Question:
         variable_length: int = 0,
         question_text: str = None,
         question_type: str = None,  # s (single),m (multi)
-        answer: dict = None,
+        answer: dict = {},
     ):
         self.survey_name = survey_name
         self.survey_name_korean = survey_name_korean
@@ -163,7 +163,18 @@ class Questions:
 
     @staticmethod
     def __extract_attr(self, name):
-        return [getattr(x, name) if hasattr(x, name) else None for x in self.list]
+        import json
+
+        _s = set()
+        for x in self.list:
+            if not hasattr(x, name):
+                continue
+            _a = getattr(x, name)
+            if isinstance(_a, dict):
+                _s.add(json.dumps(_a))
+            else:
+                _s.add(_a)
+        return list(_s)
 
     def __getattr__(self, name):
         if name not in self.__dict__:
@@ -195,7 +206,7 @@ class Questions:
         res += "***\n"
         res += "- 질문 데이터\n"
         res += "```json\n"
-        res += f"{self.__find(lambda x:len(x.answer)>3, self.list).to_json()}"
+        res += f"{(self.__find(lambda x:len(x.answer)>3, self.list) or self.list[0]).to_json()}"
         res += "```\n"
 
         display(Markdown(res))

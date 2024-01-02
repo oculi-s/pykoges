@@ -743,8 +743,7 @@ class kogesclass:
                     display_y = k
                     custom_split["(+)"] = custom_split[k]
                     del custom_split[k]
-
-                custom_split["(-)"] = lambda x: [True] * len(x)
+                    custom_split["(-)"] = lambda x: [True] * len(x)
 
                 n_class = len(custom_split.keys())
                 classes = list(custom_split.keys())

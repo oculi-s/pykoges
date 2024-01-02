@@ -25,12 +25,14 @@ class modelclass:
         self.scalers = [v for k, v in _scalers.items() if k in scalers]
         self.model = None
 
+        dfs = []
+        for key, df in self.koges.datas.items():
+            df[self.koges.y[0]] = key
+            dfs.append(df)
         if self.koges.n_class == 2:
-            dfs = []
-            for key, df in self.koges.datas.items():
-                df[self.koges.y[0]] = key
-                dfs.append(df)
             self.koges.data_binary = pd.concat(dfs)
+        else:
+            self.koges.data_multiclass = pd.concat(dfs)
 
     @staticmethod
     def __scale(koges, scaler):
@@ -151,9 +153,10 @@ class modelclass:
 
         from .utils import name_map
         import matplotlib.pyplot as plt
+        from pykoges.__koges import KogesData
 
         if not hasattr(self.koges, "data_binary"):
-            return ValueError("binary dataset이 정의되지 않았습니다.")
+            raise ValueError("binary dataset이 정의되지 않았습니다.")
 
         y = self.koges.y[0]
 
@@ -166,12 +169,13 @@ class modelclass:
             constrained_layout=True,
             sharey=True,
         )
+        _kg = KogesData.copy(self.koges)
         models, roc_aucs = [], []
         for i, scaler in enumerate(self.scalers):
-            plt.subplot(1, ncol, i + 1)
-            _kg = modelclass.__scale(self.koges, scaler=scaler)
             _kg.data = _kg.data_binary
-            _kg.data[y] = _kg.data_binary[y].astype(int)
+            _kg.data[y] = _kg.data[y].astype(int)
+
+            _kg = modelclass.__scale(_kg, scaler=scaler)
             X_train, X_test, y_train, y_test = modelclass.__split(koges=_kg)
             model = LogisticRegression(max_iter=5000)
             model.fit(X_train, y_train)
@@ -181,6 +185,7 @@ class modelclass:
             roc_auc = auc(fpr, tpr)
 
             y_name = self.koges.display_y or name_map.get(y, y)
+            plt.subplot(1, ncol, i + 1)
             plt.plot(
                 fpr, tpr, color="grey", lw=2, label=f"ROC curve (auc = {roc_auc:.2f})"
             )
@@ -231,7 +236,6 @@ class modelclass:
         display_confusion_matrix=True,
     ):
         from sklearn.metrics import confusion_matrix, accuracy_score
-        import pandas as pd
         from pykoges.__koges import KogesData
 
         import seaborn as sns
@@ -243,8 +247,8 @@ class modelclass:
         plt.rcParams["axes.unicode_minus"] = False
         accuracies, confs = [], []
 
-        if not hasattr(self.koges, "datas"):
-            return ValueError("multiclass dataset이 정의되지 않았습니다.")
+        if not hasattr(self.koges, "data_multiclass"):
+            raise ValueError("multiclass dataset이 정의되지 않았습니다.")
 
         ncol = len(self.scalers)
         fig, ax = plt.subplots(
@@ -254,11 +258,13 @@ class modelclass:
             constrained_layout=True,
             sharey=False,
         )
-
-        kg = KogesData.copy(self.koges)
-        kg.data = pd.concat(self.koges.datas.values())
+        y = self.koges.y[0]
+        _kg = KogesData.copy(self.koges)
         for i, scaler in enumerate(self.scalers):
-            _kg = modelclass.__scale(kg, scaler=scaler)
+            _kg.data = _kg.data_multiclass
+            _kg.data[y] = _kg.data[y].astype(int)
+
+            _kg = modelclass.__scale(_kg, scaler=scaler)
             X_train, X_test, y_train, y_test = modelclass.__split(_kg)
 
             lr = 0.01
@@ -355,7 +361,7 @@ class modelclass:
             lines.append(f"{w} \\times \\text{{{x}}}")
 
         y = self.koges.y[0]
-        y = self.koges.display_y or  name_map.get(y, y)
+        y = self.koges.display_y or name_map.get(y, y)
         line = "".join(lines)
         if isinstance(self.model, LinearRegression):
             equation = f""" y({y}) = {b} {line}"""

@@ -4,3 +4,5 @@ data/
 dist/
 build/
 *.egg-info/
+*.ipynb
+result/

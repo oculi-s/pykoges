@@ -140,6 +140,7 @@ name_map = {
     "mchc": "MCHC",
     "mcv": "MCV",
     "muscle": "근육량",
+    "skeletal_muscle": "골격근량",
     "plat": "PLT",
     "pulse": "맥박",
     "r_gtp": "γ-GTP",
@@ -159,6 +160,14 @@ name_map = {
     "dm": "당뇨",
     "smokepy": "흡연량(갑년)",
     "drinkaw": "주당음주량",
+    # 임의추가
+    "skmm": "골격근량",
+    "axmm": "Axial muscle",
+    "armrm": "오른팔근육량",
+    "armlm": "왼팔근육량",
+    "legrm": "오른다리근육량",
+    "leglm": "왼다리근육량",
+    "asm": "ASM",
 }
 
 ekg_map = {
@@ -323,4 +332,12 @@ type_map = {
     "pbf": 2,
     "smam": 2,
     "smdu": 2,
+    # 임의추가
+    "skmm": 2,
+    "axmm": 2,
+    "armrm": 2,
+    "armlm": 2,
+    "legrm": 2,
+    "leglm": 2,
+    "asm": 2,
 }

@@ -56,6 +56,7 @@ class Variables:
         __index_map = {
             "신체계측": ["weight", "height", "bparmc", "waist", "hip"],
             "inbody": ["muscle", "incell", "excell", "pbf"],
+            "inbody(골격근)": ["skmm", "axmm", "armrm", "armlm", "leglm", "legrm"],
             "호흡": ["fev1", "fvc", "fef25"],
             "순환": ["labi", "rabi", "pulse"],
             "뼈": ["stiffness", "bonet", "bonez"],
@@ -63,6 +64,8 @@ class Variables:
             "CBC": ["rbc", "wbc", "plat", "hb", "hct", "mch", "mchc", "mcv"],
             "대사": ["alt", "ast", "hdl", "ldl", "r_gtp", "tchl", "tg", "t_bil"],
             "인지노화": ["grwhich", "gripl1", "gripr1"],
+            "흡연음주": ["smam", "smdudy", "smdumo", "smduyr", "drinkam", "drinkfq"],
+            "기본정보": ["age", "sex"],
         }
         __index = []
         for x in self.x + self.y:
@@ -401,6 +404,7 @@ class kogesclass:
         grip_of_grwhich=True,
         abi_of_grwhich=True,
         weight_height_bmi=False,
+        appendicular_skeletal_muscle=True,
         custom_functions=[],
     ):
         import numpy as np
@@ -482,6 +486,11 @@ class kogesclass:
                 if "labi" in _kg.y and "rabi" in _kg.y:
                     _kg.y = ["abi"]
                     _kg.type = "continuous"
+
+        if appendicular_skeletal_muscle:
+            if "armrm" in df and "armlm" in df and "legrm" in df and "leglm" in df:
+                df["asm"] = df["armrm"] + df["armlm"] + df["legrm"] + df["leglm"]
+                drop_list += ["armrm", "armlm", "legrm", "leglm"]
 
         # 흡연, 음주
         if "smam" in df:

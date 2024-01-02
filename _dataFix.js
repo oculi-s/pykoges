@@ -14,9 +14,9 @@ const fs = require('fs');
 const path = require('path');
 const xlsx = require('xlsx');
 
-const d = path.join(__dirname, '../data'); // 아리랑 코호트
-const d2 = path.join(__dirname, '../data', '2020_2022'); // 인지노화 코호트
-const df = path.join(__dirname, '../data_fixed'); // 변환된 파일이 저장될 문서
+const d = path.join(__dirname, './data'); // 아리랑 코호트
+const d2 = path.join(__dirname, './data', '2020_2022'); // 인지노화 코호트
+const df = path.join(__dirname, './data_fixed'); // 변환된 파일이 저장될 문서
 if (!fs.existsSync(df)) fs.mkdirSync(df, { recursive: true });
 
 // 코드 임의수정

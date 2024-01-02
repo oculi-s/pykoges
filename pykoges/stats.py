@@ -20,7 +20,6 @@ def normality(
     from scipy import stats
 
     _kg = KogesData.copy(koges)
-
     res = []
     for x in _kg.x:
         data = _kg.data[x].dropna().astype(float)
@@ -51,6 +50,7 @@ def normality(
     # 정규성을 만족하지 않는 변수를 제외합니다.
     # 대부분의 데이터가 정규성을 만족하지 않아 왜도가 2를 넘는 변수만 제외합니다.
     _kg.x = list(set(_kg.x) - set(res))
+    return _kg
 
 
 def homogenity(
@@ -60,20 +60,19 @@ def homogenity(
     from .__koges import KogesData
     from scipy import stats
 
-    if not _kg.n_class:
-        return
-
     _kg = KogesData.copy(koges)
     res = []
+    if not _kg.datas:
+        return
 
     for x in _kg.x:
-        df_list = []
+        dfs = []
         for i in range(_kg.n_class):
-            df_list.append(_kg.dfs[i][x])
+            dfs.append(_kg.datas[i][x])
         # H0 : 변수간 분산에 유의미한 차이가 없다. (p>=th)
         # H1 : 변수간 분산에 유의미한 차이가 있다. (p<th)
-        bartlett = stats.bartlett(*df_list)[1]
-        levene = stats.levene(*df_list)[1]
+        bartlett = stats.bartlett(*dfs)[1]
+        levene = stats.levene(*dfs)[1]
         if bartlett < p_threshold or levene < p_threshold:
             res.append(x)
     print("-----------------")

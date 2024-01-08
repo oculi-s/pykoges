@@ -1,6 +1,25 @@
 __all__ = ["modelclass"]
 
 
+class softmaxResult:
+    def __init__(
+        self,
+        scaler,
+        y_test,
+        prediction,
+    ):
+        from sklearn.metrics import confusion_matrix, accuracy_score
+        import numpy as np
+
+        self.scaler = scaler
+        self.y_test = y_test
+        self.prediction = prediction
+
+        self.y_pred = np.argmax(prediction, 1)
+        self.accuracy = accuracy_score(y_test, self.y_pred)
+        self.conf_matrix = confusion_matrix(self.y_pred, y_test)
+
+
 class modelclass:
     def __init__(
         self,
@@ -24,6 +43,7 @@ class modelclass:
         self.koges = koges
         self.scalers = [v for k, v in _scalers.items() if k in scalers]
         self.model = None
+        self.results = []
 
         dfs = []
         for key, df in self.koges.datas.items():
@@ -208,34 +228,49 @@ class modelclass:
         self.model = model
         self.roc_auc = roc_auc
 
-    def muticlassRoc(self, y_test, prediction):
-        from sklearn.metrics import (
-            roc_curve,
-            auc,
-        )
+    def __muticlassRoc(self, result, isdisplay=True):
+        from sklearn.metrics import roc_curve, auc
         import matplotlib.pyplot as plt
 
+        aucs = []
         for i, _class in enumerate(self.koges.classes):
-            if (y_test == i).sum():
-                fpr, tpr, _ = roc_curve(y_test == i, prediction[:, i])
+            if (result.y_test == i).sum():
+                fpr, tpr, _ = roc_curve(result.y_test == i, result.prediction[:, i])
                 roc_auc = auc(fpr, tpr)
-                plt.plot(
-                    fpr,
-                    tpr,
-                    lw=2,
-                    label=f"{_class} (auc = {roc_auc:.2f})",
-                    color="b",
-                    alpha=(1 - i * 0.2),
-                )
-        plt.plot([0, 1], [0, 1], "k--", lw=2)
-        plt.legend(loc="lower right")
+                if isdisplay:
+                    plt.plot(
+                        fpr,
+                        tpr,
+                        lw=2,
+                        label=f"{_class} (auc = {roc_auc:.2f})",
+                        color="b",
+                        alpha=(1 - i * 0.2),
+                    )
+            else:
+                roc_auc = 0
+            aucs.append(roc_auc)
+        if isdisplay:
+            plt.plot([0, 1], [0, 1], "k--", lw=2)
+            plt.legend(loc="lower right")
+        return aucs
+
+    def __get_best(self):
+        auc = 0
+        best = False
+        for r in self.results:
+            aucs = self.__muticlassRoc(result=r, isdisplay=False)
+            auc_mean = sum(aucs) / len(aucs)
+            if auc_mean > auc:
+                auc = auc_mean
+                best = r
+        return best
 
     def softmax(
         self,
         display_roc_curve=True,
         display_confusion_matrix=True,
+        display_best=False,
     ):
-        from sklearn.metrics import confusion_matrix, accuracy_score
         from pykoges.__koges import KogesData
 
         import seaborn as sns
@@ -245,19 +280,12 @@ class modelclass:
         sns.set(font="Malgun Gothic")
         plt.rcParams["font.family"] = "Malgun Gothic"
         plt.rcParams["axes.unicode_minus"] = False
-        accuracies, confs = [], []
 
         if not hasattr(self.koges, "data_multiclass"):
             raise ValueError("multiclass dataset이 정의되지 않았습니다.")
 
-        ncol = len(self.scalers)
-        fig, ax = plt.subplots(
-            nrows=1,
-            ncols=ncol,
-            figsize=(ncol * 4, 4),
-            constrained_layout=True,
-            sharey=False,
-        )
+        self.results = []
+        threshold = 0.01
         y = self.koges.y[0]
         _kg = KogesData.copy(self.koges)
         for i, scaler in enumerate(self.scalers):
@@ -272,7 +300,7 @@ class modelclass:
                 X_train.shape[1] / 2
             )
             # model.fit의 과정, n번 학습
-            for _ in range(1000):
+            for _ in range(10000):
                 z = np.dot(X_train, _W)
 
                 predictions = z - (z.max(axis=1).reshape([-1, 1]))
@@ -284,6 +312,10 @@ class modelclass:
                 cost /= sample_size
                 cost += (1e-5 * (_W**2).sum()) / 2
 
+                # cost가 threshold미만이면 중단
+                if cost < threshold:
+                    break
+
                 softmax[np.arange(len(softmax)), y_train] -= 1
                 grad = np.dot(X_train.transpose(), softmax) / sample_size
                 grad += 1e-5 * _W
@@ -291,48 +323,62 @@ class modelclass:
                 _W -= lr * grad
 
             prediction = np.dot(X_test, _W)
-            y_pred = np.argmax(prediction, 1)
-            accuracy = accuracy_score(y_test, y_pred)
+            self.results.append(
+                softmaxResult(scaler=scaler, y_test=y_test, prediction=prediction)
+            )
 
-            plt.subplot(1, ncol, i + 1)
-            plt.title(f"{scaler.__name__} (accuracy={accuracy:.2f})")
-            self.muticlassRoc(y_test=y_test, prediction=prediction)
-            conf_matrix = confusion_matrix(y_pred, y_test)
+        if not display_best:
+            ncol = len(self.scalers)
+            fig, ax = plt.subplots(
+                nrows=1,
+                ncols=ncol,
+                figsize=(ncol * 4, 4),
+                constrained_layout=True,
+                sharey=False,
+            )
+            for i, r in enumerate(self.results):
+                plt.subplot(1, ncol, i + 1)
+                plt.title(f"{r.scaler.__name__} (accuracy={r.accuracy:.2f})")
+                self.__muticlassRoc(result=r)
 
-            accuracies.append(accuracy)
-            confs.append(conf_matrix)
+            fig.supxlabel("FPR")
+            fig.supylabel("TPR")
+            fig.suptitle("Multiclass ROC curve")
+            if display_roc_curve:
+                plt.show()
 
-        fig.supxlabel("FPR")
-        fig.supylabel("TPR")
-        fig.suptitle("Multiclass ROC curve")
-        if display_roc_curve:
-            plt.show()
+            fig2, ax = plt.subplots(
+                nrows=1,
+                ncols=ncol,
+                figsize=(ncol * 4, 4),
+                constrained_layout=True,
+                sharey=True,
+            )
+            for i, r in enumerate(self.results):
+                plt.subplot(1, ncol, i + 1)
+                sns.heatmap(r.conf_matrix, annot=True, fmt="d", cmap="Blues")
+                plt.title(f"Softmax ({r.scaler.__name__})")
+            fig2.suptitle("Confusion matrix")
+            if display_confusion_matrix:
+                plt.show()
+        else:
+            r = self.__get_best()
+            fig = plt.figure(figsize=(5, 4))
+            plt.title(f"{r.scaler.__name__} (accuracy={r.accuracy:.2f})")
+            self.__muticlassRoc(result=r)
+            plt.xlabel("FPR")
+            plt.ylabel("TPR")
+            if display_roc_curve:
+                plt.show()
 
-        fig2, ax = plt.subplots(
-            nrows=1,
-            ncols=ncol,
-            figsize=(ncol * 4, 4),
-            constrained_layout=True,
-            sharey=True,
-        )
-        for i, scaler in enumerate(self.scalers):
-            plt.subplot(1, ncol, i + 1)
-            sns.heatmap(confs[i], annot=True, fmt="d", cmap="Blues")
+            fig2 = plt.figure(figsize=(5, 4))
+            sns.heatmap(r.conf_matrix, annot=True, fmt="d", cmap="Blues")
             plt.title(f"Softmax ({scaler.__name__})")
-        fig2.suptitle("Confusion matrix")
-
-        if display_confusion_matrix:
-            plt.show()
+            if display_confusion_matrix:
+                plt.show()
 
         self.koges.SAVE["multiclassRoc"] = fig
         self.koges.SAVE["softmaxClassifier"] = fig2
-
-        accuracy = max(accuracies)
-        conf_matrix = confs[accuracies.index(accuracy)]
-
-        self.accuracy = accuracy
-        self.conf_matrix = conf_matrix
-        # self.model = model
 
     def equation(
         self,

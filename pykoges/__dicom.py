@@ -256,7 +256,7 @@ class Dicom:
             res.datas[idx] = dicom
         return res
 
-    def seed_growing_3d(self, seed_list=[], threshold=10, radius=10, largest=True):
+    def grow_from_seed_3d(self, seed_list=[], threshold=10, radius=10, largest=True):
         import numpy as np
         from scipy import ndimage
         from tqdm.notebook import tqdm

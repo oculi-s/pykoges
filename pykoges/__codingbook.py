@@ -1,13 +1,10 @@
 class codingbook:
     @staticmethod
     def __readCodingBook(file_path):
-        import csv
-
-        import openpyxl
-
+        import csv, openpyxl
         from pykoges.datatype import Question
 
-        questions_list = []
+        q = []
         # 파일읽기
         wb = openpyxl.Workbook()
         db = wb.active
@@ -32,25 +29,23 @@ class codingbook:
                     # 파일 정보 추가
                     question.add_fileinfo(file_path)
                     # 전체 질문 목록에 추가
-                    questions_list.append(question)
+                    q.append(question)
                 # 행의 8개 데이터가 모두 빈 경우 경우 (질문 선지)
                 elif question:
                     # 설정된 질문에 답변 추가
                     question.add_answer(row)
-        return questions_list
+        return q
 
     def read(folder_name):
         import os
-
         from tqdm.notebook import tqdm
-
         from pykoges.datatype import Questions
 
         folder = os.path.abspath(folder_name)
         if not os.path.exists(folder):
             raise FileExistsError("파일을 읽어올 경로가 존재하지 않습니다.\n폴더 이름을 다시 설정해주세요.")
         # 중복실행을 대비해 초기 변수들을 비워줍니다.
-        questions_list = []
+        q = []
         # 확장자가 없거나 (폴더)
         # 엑셀을 실행시켰을 때 생기는 임시파일 (~$...)인경우 통과
         files = filter(
@@ -65,8 +60,8 @@ class codingbook:
             filePath = os.path.join(folder, x)
             # 코딩북인경우 readCodingBook실행
             if "codingbook" in name:
-                questions_list += codingbook.__readCodingBook(filePath)
-        return Questions(questions_list, folder_name=folder_name)
+                q += codingbook.__readCodingBook(filePath)
+        return Questions(q, folder_name=folder_name)
 
 
 __all__ = ["codingbook"]

@@ -137,19 +137,16 @@ class KogesData:
         }
         self.option = {}
 
-    def __copy__(self):
+    def copy(self):
         import copy
 
-        new_cls = self.__class__()
+        res = self.__class__()
         for k, v in self.__dict__.items():
             try:
-                setattr(new_cls, k, copy.deepcopy(v))
+                setattr(res, k, copy.deepcopy(v))
             except:
-                setattr(new_cls, k, v)
-        return new_cls
-
-    def copy(self):
-        return self.__copy__()
+                setattr(res, k, v)
+        return res
 
     def save(
         self,

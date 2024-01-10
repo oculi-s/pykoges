@@ -62,25 +62,23 @@ def arr_to_df(df, column=None):
     import pandas as pd
 
     df = list(map(list, df))
-    if column:
-        df = pd.DataFrame(df, columns=column, index=None)
-    else:
-        df[0][0] = None
-        df = pd.DataFrame(df[1:], columns=df[0], index=None)
-    df = df.set_index(list(df)[0])
+    if not column:
+        column, df = df[0], df[1:]
+    df = pd.DataFrame(df, columns=column, index=None)
+    df = df.style.hide(axis="index")
     return df
 
 
 def arr_to_df_split(df, n=5, column=None):
     import pandas as pd
 
-    df = pd.DataFrame(df)
+    df = list(map(list, df))
     if not column:
-        column, df = df.iloc[0, :], df.iloc[1:, :]
+        column, df = df[0], df[1:]
     column = list(column) * ((len(df) + n - 1) // n)
     dfs = pd.DataFrame()
     for i in range(0, len(df), n):
-        dfn = df.iloc[i : i + n, :]
+        dfn = pd.DataFrame(df[i : i + n])
         dfn = dfn.reset_index(drop=True)
         dfs = pd.concat([dfs, dfn], axis=1, ignore_index=True).fillna("-")
     dfs.columns = column

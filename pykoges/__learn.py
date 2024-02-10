@@ -256,6 +256,8 @@ class modelclass:
             )
             plt.plot([0, 1], [0, 1], color="navy", lw=2, linestyle="--")
             plt.title(f"{y_name} ({self.scalers[best_idx].__name__})")
+            plt.xlabel("False Positive Rate")
+            plt.ylabel("True Positive Rate")
             plt.legend(loc="lower right")
             self.koges.SAVE["LogisticRegression"] = fig
         else:

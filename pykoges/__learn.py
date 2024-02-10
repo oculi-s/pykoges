@@ -290,7 +290,8 @@ class modelclass:
             plt.show()
         plt.close()
 
-        _W = models[roc_aucs.index(max(roc_aucs))]
+        roc_auc = max(roc_aucs)
+        _W = models[roc_aucs.index(roc_auc)]
         self.bias, self.coef = _W[0], _W[1:]
         self.roc_auc = roc_auc
 

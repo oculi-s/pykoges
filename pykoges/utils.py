@@ -114,7 +114,7 @@ def remove_duplicate_col(df):
 
 eps = 1e-9
 # 변수, 함수에 맞춰 새로운 변수를 만들어줍니다. (차원축소/확장)
-div = lambda a, b: a / (b + eps) * 100
+div = lambda a, b: a / (b + eps)
 mul = lambda a, b: a * b
 
 

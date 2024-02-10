@@ -286,7 +286,7 @@ def boxplot(koges, isdisplay=True, ncol=8):
         sns.boxplot(data=df_list, palette="Set3", showfliers=False)
         plt.xlabel(name_map.get(x, x))
         if _kg.n_class == 2:
-            plt.xticks(range(_kg.n_class), ["(-)", "(+)"])
+            plt.xticks(range(_kg.n_class), _kg.classes)
         elif isdiscrete(_kg.q, _kg.y[0]):
             plt.xticks(range(_kg.n_class))
         else:

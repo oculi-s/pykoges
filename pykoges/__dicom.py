@@ -1,12 +1,12 @@
 __all__ = ["Dicom"]
 
 
-def _plt(img3d, nrow, ncol, only):
+def _plt(img3d, nrow, ncol, only, dicom):
     import matplotlib.pyplot as plt
 
     if only:
+        plt.title(dicom.id)
         plt.imshow(img3d[only], cmap="gray")
-        plt.show()
         return
 
     fig, axs = plt.subplots(
@@ -22,6 +22,7 @@ def _plt(img3d, nrow, ncol, only):
             ax = axs[i, j] if nrow != 1 else axs[j]
             ax.imshow(img3d[k], cmap="gray")
             ax.axis("off")
+    plt.suptitle(dicom.id)
     plt.show()
 
 
@@ -37,14 +38,14 @@ def _conv(d, ax=0):
     )
 
 
-def _nearby(seed, dicom, d=10):
+def _nearby(seed, dicom, d=3):
     import numpy as np
 
     x, y, z = seed
     stack = []
-    for i in np.arange(x - d / 2, x + d / 2):
-        for j in np.arange(y - d / 2, y + d / 2):
-            for k in np.arange(z - d / 2, z + d / 2):
+    for i in np.arange(x - d, x + d + 1):
+        for j in np.arange(y - d, y + d + 1):
+            for k in np.arange(z - d, z + d + 1):
                 if 0 <= i < dicom.x and 0 <= j < dicom.y and 0 <= k < dicom.z:
                     if _dist((i, j, k), seed) <= np.sqrt(d):
                         stack.append((int(i), int(j), int(k)))
@@ -54,8 +55,20 @@ def _nearby(seed, dicom, d=10):
 def _dist(a, b):
     import numpy as np
 
-    # return np.sqrt((a - b).dot(a - b))
-    return np.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2)
+    return max([abs(x) for x in [a[0] - b[0], a[1] - b[1], a[2] - b[2]]])
+    # return np.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2)
+
+
+def _can(img, p, d=3):
+    x, y, z = p
+    return (
+        0
+        not in img[
+            x - d // 2 : x + d // 2 + 1,
+            y - d // 2 : y + d // 2 + 1,
+            z - d // 2 : z + d // 2 + 1,
+        ]
+    )
 
 
 class DicomDatas:
@@ -73,11 +86,17 @@ class DicomDatas:
         self.modality = dcm.Modality
         self.type = dcm.ImageType
 
+        self.dx, self.dz = dcm.PixelSpacing
+        self.dy = dcm.SliceThickness
+        self.volume = 0
+
+        self.contours = []
+        self.areas = []
+
         self.n = len(dicoms)
         dicoms = [x for x in dicoms if hasattr(x, "SliceLocation")]
         self.shape = [dcm.Columns, len(dicoms), dcm.Rows]
         self.x, self.y, self.z = self.shape
-        self.volume = self.x * self.y * self.z
 
         self.data = np.zeros(self.shape)
         for i, x in enumerate(sorted(dicoms, key=lambda x: x.SliceLocation)):
@@ -109,17 +128,49 @@ class DicomDatas:
         res.volume = res.x * res.y * res.z
         return res
 
+    def as4d(self):
+        import numpy as np
+
+        res = self.copy()
+        if len(res.shape) != 4:
+            res.data = np.repeat(res.data[..., np.newaxis], 3, -1)
+        res.data = (res.data / res.data.max() * 255).astype(np.uint8)
+        return res
+
+    def point(self, seed, radius=3):
+        res = self.copy()
+        seed = (
+            int(seed[0] * res.x),
+            int(seed[1] * res.y),
+            # int(seed[2] * dicom.z),
+            int(seed[2]),
+        )
+        stack = _nearby(seed, res, radius)
+        for p in stack:
+            res.data[p[0], p[1], :] = [0, 255, 0]
+        return res
+
+    def plot_axial(self, ncol=8, nrow=4, only=None):
+        _plt(_conv(self.data, 2), nrow, ncol, only, self)
+
+    def plot_sagittal(self, ncol=8, nrow=4, only=None):
+        _plt(_conv(self.data, 1), nrow, ncol, only, self)
+
+    def plot_coronal(self, ncol=8, nrow=4, only=None):
+        _plt(_conv(self.data, 0), nrow, ncol, only, self)
+
 
 class Dicom:
     def __init__(self, datas):
         self.datas = datas
+        self.n = len(datas)
 
     def __repr__(self):
         from pykoges.utils import arr_to_df_split
         from IPython.display import display
 
-        arr = [[x.id, x.x, x.y, x.z, x.type] for x in self.datas]
-        display(arr_to_df_split(arr, column=["코드", "X", "Y(n)", "Z", "type"], n=20))
+        arr = [[x.id, x.x, x.y, x.z] for x in self.datas]
+        display(arr_to_df_split(arr, column=["코드", "X", "Y(n)", "Z"], n=20))
         return ""
 
     def copy(self):
@@ -151,16 +202,26 @@ class Dicom:
             datas.append(DicomDatas(dicoms))
         return Dicom(datas)
 
-    def plot_axial(self, at=0, nrow=4, ncol=8, only=None):
-        _plt(_conv(self.datas[at].data, 2), nrow, ncol, only)
+    def plot_axial(self, ncol=8, nrow=4, only=None):
+        for dicom in self.datas:
+            dicom.plot_axial(ncol, nrow, only)
 
-    def plot_sagittal(self, at=0, nrow=4, ncol=8, only=None):
-        _plt(_conv(self.datas[at].data, 1), nrow, ncol, only)
+    def plot_sagittal(self, ncol=8, nrow=4, only=None):
+        for dicom in self.datas:
+            dicom.plot_sagittal(ncol, nrow, only)
 
-    def plot_coronal(self, at=0, nrow=4, ncol=8, only=None):
-        _plt(_conv(self.datas[at].data, 0), nrow, ncol, only)
+    def plot_coronal(self, ncol=8, nrow=4, only=None):
+        for dicom in self.datas:
+            dicom.plot_coronal(ncol, nrow, only)
 
-    def upscale(self, dx=2, dy=2, dz=2):
+    def plot_seed_axial(self, ncol=8, nrow=4, seed_list=[(0, 0, 0)]):
+        import matplotlib.pyplot as plt
+
+        fig, axs = plt.figure()
+        for dicom in self.datas:
+            pass
+
+    def scale(self, dx=2, dy=2, dz=2):
         from scipy.ndimage import zoom
         from tqdm.notebook import tqdm
 
@@ -172,7 +233,7 @@ class Dicom:
             res.datas[idx] = dicom
         return res
 
-    def crop_3d(self, threshold=0.5):
+    def crop(self, threshold=0.1):
         from scipy import ndimage
         import numpy as np
 
@@ -182,40 +243,50 @@ class Dicom:
             labeled, n = ndimage.label(mask)
             bbox = ndimage.find_objects(labeled == 1)[0]
             dicom.data = np.array(dicom.data[bbox])
+            if dicom.data.sum() < 1000:
+                res.datas.pop(idx)
+            else:
+                res.datas[idx] = dicom
+        return res.copy()
+
+    def on(self, back, color=None):
+        import numpy as np
+
+        front = self.copy().as4d()
+        res = back.copy().as4d()
+        for idx, dicom in enumerate(res.datas):
+            fimg = front.datas[idx].data
+            fimg[:, :, :, [1, 2]] = 0
+            dicom.data = np.where(fimg, color or fimg, dicom.data)
             res.datas[idx] = dicom
         return res
 
     def as4d(self):
-        import numpy as np
-
         res = self.copy()
         for idx, dicom in enumerate(res.datas):
-            if len(dicom.shape) != 4:
-                dicom.data = np.repeat(dicom.data[..., np.newaxis], 3, -1)
-            dicom.data = (dicom.data / np.amax(dicom.data) * 255).astype(np.uint8)
-            res.datas[idx] = dicom
+            res.datas[idx] = dicom.as4d()
         return res
 
-    def point(self, seed_list=[(0, 0)], radius=10):
+    def point(self, seed_list=[(0, 0, 0)], radius=5):
         res = self.copy().as4d()
         for idx, dicom in enumerate(res.datas):
-            seed = seed_list[idx]
-            seed = (int(seed[0] * dicom.x), int(seed[1] * dicom.y), int(seed[2]))
-            stack = _nearby(seed, dicom, radius)
-            for p in stack:
-                dicom.data[p[0], p[1], :] = [255, 0, 0]
-            res.datas[idx] = dicom
+            if idx < len(seed_list):
+                seed = seed_list[idx]
+            else:
+                seed = seed_list[-1]
+            res.datas[idx] = dicom.point(seed, radius)
         return res
 
-    def large(self):
+    def take(self, n=1):
         from scipy import ndimage
         import numpy as np
 
         res = self.copy()
         for idx, dicom in enumerate(res.datas):
-            labeled, n = ndimage.label(dicom.data)
-            sizes = ndimage.sum(dicom.data, labeled, range(n + 1))
-            dicom.data = labeled == np.argmax(sizes)
+            labeled, k = ndimage.label(dicom.data)
+            sizes = ndimage.sum(dicom.data, labeled, range(k + 1))
+            labels = np.argsort(sizes)[-n:]
+            dicom.data = np.where(np.isin(labeled, labels), dicom.data, 0)
             res.datas[idx] = dicom
         return res
 
@@ -233,17 +304,18 @@ class Dicom:
 
     def only(self, start=0, end=1):
         import numpy as np
+        from tqdm.notebook import tqdm
 
         res = self.copy()
-        for idx, dicom in enumerate(res.datas):
-            dicom.data = dicom.data / np.amax(dicom.data)
+        for idx, dicom in tqdm(enumerate(res.datas)):
+            dicom.data = dicom.data / dicom.data.max()
             dicom.data = np.where(
                 (start <= dicom.data) & (dicom.data <= end), dicom.data, 0
             )
             res.datas[idx] = dicom
         return res
 
-    def fill(self, threshold=0):
+    def fill3d(self, threshold=0):
         from scipy import ndimage
         import numpy as np
 
@@ -251,58 +323,133 @@ class Dicom:
         for idx, dicom in enumerate(res.datas):
             dicom.data = dicom.data / dicom.data.max()
             dicom.data = np.where(
-                ndimage.binary_fill_holes(dicom.data > threshold), dicom.data, 0
+                ndimage.binary_fill_holes(
+                    dicom.data > threshold, structure=np.ones((3, 3, 3))
+                ),
+                dicom.data,
+                0,
             ).reshape(dicom.data.shape)
             res.datas[idx] = dicom
         return res
 
-    def grow_from_seed_3d(self, seed_list=[], threshold=10, radius=10, largest=True):
+    def fill(self, threshold=40):
+        import cv2, numpy as np
+
+        res = self.copy()
+        for idx, dicom in enumerate(res.datas):
+            dicom.data = (dicom.data / dicom.data.max() * 255).astype(np.uint8)
+            for i in range(dicom.z):
+                sliced = dicom.data[:, :, i].copy()
+                _, binary = cv2.threshold(sliced, 0, 255, cv2.THRESH_BINARY)
+                contours, _ = cv2.findContours(
+                    binary, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE
+                )
+                for contour in contours:
+                    area = cv2.contourArea(contour)
+                    if area < threshold:
+                        cv2.drawContours(sliced, [contour], 0, 255, -1)
+                dicom.data[:, :, i] = sliced
+            res.datas[idx] = dicom
+        return res
+
+    def drop(self, threshold=40):
+        import cv2, numpy as np
+
+        res = self.copy()
+        for idx, dicom in enumerate(res.datas):
+            dicom.data = (dicom.data / dicom.data.max() * 255).astype(np.uint8)
+            for i in range(dicom.z):
+                sliced = dicom.data[:, :, i].copy()
+                _, binary = cv2.threshold(sliced, 0, 255, cv2.THRESH_BINARY_INV)
+                contours, _ = cv2.findContours(
+                    binary, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE
+                )
+                for contour in contours:
+                    area = cv2.contourArea(contour)
+                    if area < threshold:
+                        cv2.drawContours(sliced, [contour], 0, 0, -1)
+                dicom.data[:, :, i] = sliced
+            res.datas[idx] = dicom
+        return res
+
+    def seed_growing(self, seed_list=[], threshold=10, kernel_size=1):
         import numpy as np
-        from scipy import ndimage
         from tqdm.notebook import tqdm
 
         res = self.copy()
         for idx, dicom in tqdm(enumerate(res.datas)):
-            seed = seed_list[idx]
+            dicom.data = (dicom.data / dicom.data.max() * 255).astype(np.uint8)
+            if idx < len(seed_list):
+                seed = seed_list[idx]
+            else:
+                seed = seed_list[-1]
             farm = np.zeros_like(dicom.data)
-            seed = (int(seed[0] * dicom.x), int(seed[1] * dicom.y), int(seed[2]))
-            stack = _nearby(seed, dicom, radius)
-            v = np.mean(dicom.data[stack])
-            # dfs bfs
+            seed = (
+                int(seed[0] * dicom.x),
+                int(seed[1] * dicom.y),
+                # int(seed[2] * dicom.z),
+                int(seed[2]),
+            )
+            if not dicom.data[seed]:
+                continue
+            stack = [seed]
+            # dfs bfs 선택가능
             while stack:
-                # for p in stack:
-                p = stack.pop()
-                x, y, z = p
-                if farm[p]:
-                    continue
-                # if abs(dicom.data[p]-dicom.data[stack].mean()) > threshold:
-                #     continue
-                if abs(dicom.data[p] - v) * 255 > threshold:
-                    # + _dist(p, seed) / dicom.volume
-                    continue
+                x, y, z = p = stack.pop()
                 farm[p] = 1
                 for i in range(-1, 2):
                     for j in range(-1, 2):
                         for k in range(-1, 2):
+                            p = (x + i, y + j, z + k)
                             if (
                                 0 <= x + i < dicom.x
                                 and 0 <= y + j < dicom.y
                                 and 0 <= z + k < dicom.z
+                                and not farm[p]
+                                and _can(dicom.data, p, kernel_size)
+                                and abs(dicom.data[p] - dicom.data[seed]) <= threshold
                             ):
-                                stack.append((x + i, y + j, z + k))
-            # for p in stack:
-            #     if (farm[_nearby(p, dicom, 3)] == 0).any():
-            #         farm[p] = 0
-
-            farm = ndimage.binary_fill_holes(farm).astype(int)
-            if largest:
-                labeled, n = ndimage.label(farm)
-                result = np.zeros_like(farm)
-                result[labeled == labeled[seed]] = 1
-                farm = result
-            if np.amax(farm) == 0:
+                                stack.append(p)
+            if farm.max() == 0:
                 raise ValueError("데이터가 비었습니다.")
             dicom.data = farm
+            res.datas[idx] = dicom
+        return res
+
+    def dilate(self, kernal_size=5):
+        import cv2, numpy as np
+
+        res = self.copy()
+        for idx, dicom in enumerate(res.datas):
+            dicom.volume = 0
+            dicom.contours = []
+            dicom.areas = []
+            for i in range(dicom.z):
+                sliced = dicom.data[:, :, i]
+                contours = cv2.findContours(
+                    sliced, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+                )
+                contours = contours[0] if len(contours) == 2 else contours[1]
+                smoothed = np.zeros_like(sliced)
+                for contour in contours:
+                    peri = cv2.arcLength(contour, True)
+                    contour = cv2.approxPolyDP(contour, 0.001 * peri, True)
+
+                    cv2.drawContours(smoothed, [contour], 0, 255, -1)
+                kernel = cv2.getStructuringElement(
+                    cv2.MORPH_DILATE, (kernal_size, kernal_size)
+                )
+                dilate = cv2.morphologyEx(smoothed, cv2.MORPH_DILATE, kernel)
+                contours = cv2.findContours(
+                    dilate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+                )
+                contours = contours[0] if len(contours) == 2 else contours[1]
+                area = sum([cv2.contourArea(contour) for contour in contours])
+                # dilate로 늘어난 면적의 90%만 가져옴
+                dicom.data[:, :, i] = dilate
+                dicom.contours.append(contours)
+                dicom.areas.append(area)
+                dicom.volume += area * 0.9 * (dicom.dz * dicom.dx * dicom.dy)
             res.datas[idx] = dicom
         return res
 
@@ -330,3 +477,48 @@ class Dicom:
     #         img = res == max_label
     #     plt.imshow(img)
     #     return img
+
+    def smooth(self, kernal_size=3):
+        import cv2, numpy as np
+
+        res = self.copy()
+        for idx, dicom in enumerate(res.datas):
+            for i in range(dicom.z):
+                sliced = dicom.data[:, :, i]
+                contours = cv2.findContours(
+                    sliced, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+                )
+                contours = contours[0] if len(contours) == 2 else contours[1]
+                smoothed = np.zeros_like(sliced)
+                for contour in contours:
+                    peri = cv2.arcLength(contour, True)
+                    contour = cv2.approxPolyDP(contour, 0.001 * peri, True)
+
+                    cv2.drawContours(smoothed, [contour], 0, 255, -1)
+                kernel = cv2.getStructuringElement(
+                    cv2.MORPH_OPEN, (kernal_size, kernal_size)
+                )
+                dilate = cv2.morphologyEx(smoothed, cv2.MORPH_OPEN, kernel)
+                dicom.data[:, :, i] = np.where(dilate, sliced, 0)
+            res.datas[idx] = dicom
+        return res
+
+    def kmeans(self, K=4):
+        import cv2, numpy as np
+
+        res = self.copy()
+        for idx, dicom in enumerate(res.datas):
+            vectorized = dicom.data.reshape((-1, 1)).astype(np.float32)
+
+            criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+            attempts = 10
+            ret, label, center = cv2.kmeans(
+                vectorized, K, None, criteria, attempts, cv2.KMEANS_PP_CENTERS
+            )
+            label = label.flatten()
+
+            center = np.uint8(center)
+            center[label[0]] = 0
+            dicom.data = center[label].reshape(dicom.data.shape)
+            res.datas[idx] = dicom
+        return res

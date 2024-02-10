@@ -183,7 +183,7 @@ def split(
     with_homogenity=False,
     isdisplay=True,
     custom_split={},
-    dispaly_y="",
+    display_y="",
 ):
     from .__koges import KogesData, kogesclass
 
@@ -202,7 +202,7 @@ def split(
         n_class=n_class,
         isdisplay=isdisplay,
         custom_split=custom_split,
-        display_y=dispaly_y,
+        display_y=display_y,
     )
     # 3. 등분산성 검정
     if with_homogenity:
@@ -252,9 +252,10 @@ def summary(
         display(HTML(summary.to_html()))
 
 
-def boxplot(koges, isdisplay=True):
+def boxplot(koges, isdisplay=True, ncol=8):
     from .utils import isdiscrete
     from .utils import name_map
+    from .utils import get_first_col
 
     import seaborn as sns
     import matplotlib.pyplot as plt
@@ -264,21 +265,22 @@ def boxplot(koges, isdisplay=True):
     plt.rcParams["axes.unicode_minus"] = False
 
     _kg = koges
-    col = min(8, len(_kg.x))
-    row = (len(_kg.x) + col - 1) // col
+    ncol = min(ncol, len(_kg.x))
+    nrow = (len(_kg.x) + ncol - 1) // ncol
     plt.ioff()
     boxplot, ax = plt.subplots(
-        nrows=row,
-        ncols=col,
-        figsize=(col * 1.5, row * 2),
+        nrows=nrow,
+        ncols=ncol,
+        figsize=(ncol * 1.5, nrow * 2),
         constrained_layout=True,
         sharey=False,
     )
     for _, x in enumerate(_kg.x):
         df_list = []
         for i in range(_kg.n_class):
-            df_list.append(list(_kg.datas[i][x]))
-        plt.subplot(row, col, _ + 1)
+            df_class = get_first_col(_kg.datas[i][x])
+            df_list.append(list(df_class))
+        plt.subplot(nrow, ncol, _ + 1)
         sns.boxplot(data=df_list, palette="Set3", showfliers=False)
         plt.xlabel(name_map.get(x, x))
         if _kg.n_class == 2:
@@ -312,7 +314,7 @@ def __correlation_key(koges):
 
 def correlation(koges, isdisplay=True):
     from .utils import iscontinuous, arr_to_df_split
-    from .utils import name_map
+    from .utils import name_map, remove_duplicate_col
 
     from IPython.display import display
     import pandas as pd
@@ -333,7 +335,7 @@ def correlation(koges, isdisplay=True):
     if iscontinuous(_kg.q, y):
         key = __correlation_key(_kg)
         corr = (
-            pd.DataFrame(df.corr(method="pearson")[key])
+            remove_duplicate_col(df.corr(method="pearson")[key])
             .drop([key], axis=0)
             .sort_values(by=key, ascending=False)
             .T
@@ -355,8 +357,9 @@ def correlation(koges, isdisplay=True):
     _kg.correlation = corr
 
 
-def scatter(koges, isdisplay=True):
+def scatter(koges, isdisplay=True, ncol=8):
     from .utils import iscontinuous, name_map
+    from .utils import get_first_col
 
     import seaborn as sns
     import matplotlib.pyplot as plt
@@ -373,7 +376,7 @@ def scatter(koges, isdisplay=True):
 
     # 가로 8칸에 scatter plot
     keys = [x for x in _kg.correlation if iscontinuous(_kg.q, x) and x != key]
-    ncol = max(min(8, len(keys) - 1), 2)
+    ncol = max(min(ncol, len(keys) - 1), 2)
     nrow = max((len(keys) + ncol - 1) // ncol, 1)
     plt.ioff()
     fig, axis = plt.subplots(
@@ -386,7 +389,9 @@ def scatter(koges, isdisplay=True):
 
     for i, x in enumerate(keys):
         plt.subplot(nrow, ncol, i + 1)
-        plt.scatter(_kg.data[x], _kg.data[key], alpha=0.1)
+        df_class = get_first_col(_kg.data[x])
+        df_y = get_first_col(_kg.data[key])
+        plt.scatter(df_class, df_y, alpha=0.1)
         # plt.title(f'{x} - {y_code}')
         plt.xlabel(name_map.get(x, x))
 

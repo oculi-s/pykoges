@@ -116,7 +116,6 @@ class KogesData:
         self,
         variables: Variables = None,
     ):
-        from datetime import datetime as dt
         from pykoges.utils import isdiscrete, isbinary
 
         if not variables:
@@ -132,9 +131,7 @@ class KogesData:
         else:
             self.type = "continuous"
         self.patientinfo = variables.patientinfo
-        self.SAVE = {
-            "time": dt.today().strftime("%y%m%d_%H%M"),
-        }
+        self.SAVE = {}
         self.option = {}
 
     def copy(self):
@@ -157,8 +154,10 @@ class KogesData:
         from pykoges.utils import name_map, arr_to_df_split, df_to_img
         from IPython.display import display
         from tqdm.notebook import tqdm
+        from datetime import datetime as dt
 
         y = self.y[0]
+        self.SAVE["time"] = dt.today().strftime("%y%m%d_%H%M")
         d = os.path.join("./result", f'{self.SAVE["time"]}_{y.upper()}')
         if not os.path.exists(d) and issave:
             os.makedirs(d, exist_ok=True)
@@ -237,7 +236,7 @@ class KogesData:
 
 class kogesclass:
     @staticmethod
-    def __drop_norm(df, q, alpha=2):
+    def __drop_norm(df, q, right_alpha, left_alpha):
         import pandas as pd
 
         from pykoges.utils import iscontinuous
@@ -252,7 +251,30 @@ class kogesclass:
                 df[code] = df[code].astype(float)
                 m = df[code].mean()
                 std = df[code].std()
-                df = df[(df[code] >= m - alpha * std) & (df[code] <= m + alpha * std)]
+                df = df[
+                    (df[code] >= m - left_alpha * std)
+                    & (df[code] <= m + right_alpha * std)
+                ]
+            # 연속 데이터가 아닌 경우
+            else:
+                df[code] = df[code].astype(int)
+        return df
+
+    def __drop_quantile(df, q, right_quantile, left_quantile):
+        import pandas as pd
+        from pykoges.utils import iscontinuous
+
+        df = pd.DataFrame(df)
+        for code in df:
+            if iscontinuous(q, code):
+                # 데이터 개수가 3개 이상이어야 데이터를 filtering할 수 있습니다.
+                if len(df[code]) < 3:
+                    continue
+                df[code] = df[code].astype(float)
+                df = df[
+                    (df[code] >= df[code].quantile(left_quantile))
+                    & (df[code] <= df[code].quantile(right_quantile))
+                ]
             # 연속 데이터가 아닌 경우
             else:
                 df[code] = df[code].astype(int)
@@ -533,7 +555,10 @@ class kogesclass:
     def drop(
         koges: KogesData,
         drop_threshold=0.3,
-        filter_alpha=float("inf"),
+        filter_left_alpha=float("inf"),
+        filter_right_alpha=float("inf"),
+        filter_right_quantile=1,
+        filter_left_quantile=0,
         data_impute=False,
         display_result=True,
         display_count=True,
@@ -549,7 +574,7 @@ class kogesclass:
         df = pd.DataFrame(_kg.data)
 
         _kg.option["drop_threshold"] = drop_threshold
-        _kg.option["filter_alpha"] = filter_alpha
+        _kg.option["filter_alpha"] = filter_right_alpha
         _kg.option["data_impute"] = data_impute
         # isbinary나 isdiscrete에서 오류가 나지 않도록
         # 새로 생성된 변수에 대해 Questions에 추가해줍니다.
@@ -575,16 +600,34 @@ class kogesclass:
         df_drop = df_var.dropna(axis=0, how="any")
         df_drop = df_drop.dropna(axis=1, how="all")
         # dropNorm으로 정규분포를 벗어나는 데이터 제거
-        df_sdfilter = kogesclass.__drop_norm(df_drop, _kg.q, alpha=filter_alpha)
-        n, n1, n2, n3 = len(df), len(df_y), len(df_drop), len(df_sdfilter)
+        df_sdfilter = kogesclass.__drop_norm(
+            df_drop, _kg.q, right_alpha=filter_right_alpha, left_alpha=filter_left_alpha
+        )
+        # dropQuantile으로 상하위 % 데이터 제거
+        df_filter = kogesclass.__drop_quantile(
+            df_sdfilter,
+            _kg.q,
+            right_quantile=filter_right_quantile,
+            left_quantile=filter_left_quantile,
+        )
+        n, n1, n2, n3 = len(df), len(df_y), len(df_drop), len(df_filter)
 
         # 결측치를 처리한 경우 제거된 결측치가 없으므로 출력하지 않습니다.
         result = [
-            ["", "데이터", "비율", "변수"],
-            ["전체 데이터", n, "100%", len(df.columns)],
+            ["", "N", "남성", "여성", "비율", "변수"],
+            [
+                "전체 데이터",
+                n,
+                len(df[df["sex"] == "1"]),
+                len(df[df["sex"] == "2"]),
+                "100%",
+                len(df.columns),
+            ],
             [
                 "Y값 결측치 제거",
                 n1 - n,
+                "",
+                "",
                 f"{int((n1-n)/n*100)}%",
                 (len(df_y.columns) - len(df.columns)) or "",
             ],
@@ -592,30 +635,38 @@ class kogesclass:
                 f"결측치 {int(drop_threshold*100)}% 이상인\n입력변수 제거",
                 "",
                 "",
+                "",
+                "",
                 (len(df_var.columns) - len(df_y.columns)) or "",
             ],
             [
                 "결측치 제거",
-                n2 - n,
-                f"{int((n2-n)/n*100)}%",
+                n2 - n1,
+                "",
+                "",
+                f"{int((n2-n1)/n*100)}%",
                 (len(df_drop.columns) - len(df_var.columns)) or "",
             ],
-            filter_alpha != float("inf")
+            (filter_right_alpha != float("inf") or filter_left_alpha != float("inf"))
             and [
-                f"{filter_alpha}SD 초과제거",
+                f"+{filter_right_alpha}SD 초과, -{filter_left_alpha}SD 미만제거",
                 n3 - n2,
+                "",
+                "",
                 f"{int((n3-n2)/n*100)}%",
                 (len(df_sdfilter.columns) - len(df_drop.columns)) or "",
             ],
             [
                 "최종데이터",
                 n3,
+                len(df_filter[df_filter["sex"] == 1]),
+                len(df_filter[df_filter["sex"] == 2]),
                 f"{int(n3/n*100)}%",
-                len(df_sdfilter.columns),
+                len(df_filter.columns),
             ],
         ]
         result = arr_to_df([x for x in result if x])
-        result = result.style.set_table_styles(
+        result = result.set_table_styles(
             [dict(selector="th", props=[("white-space", "pre")])]
         )
 
@@ -623,11 +674,13 @@ class kogesclass:
             display(HTML(result.to_html()))
 
         # 데이터가 없으면 error를 띄워 프로그램 진행을 멈춥니다.
-        if df_sdfilter.empty:
-            raise ValueError("조건을 만족하는 데이터가 존재하지 않습니다.\ndrop_threshold를 더 낮게 조정하세요.")
+        if df_filter.empty:
+            raise ValueError(
+                "조건을 만족하는 데이터가 존재하지 않습니다.\ndrop_threshold를 더 낮게 조정하세요."
+            )
 
         keys = _kg.q.keys(astype=str)
-        count = [df_sdfilter.index.isin([key], level=0).sum() for key in keys]
+        count = [df_filter.index.isin([key], level=0).sum() for key in keys]
         count = pd.DataFrame(count, index=keys, columns=["데이터 개수"])
         count = count[count.iloc[:, 0] != 0].T
         count["total "] = count.sum(axis=1)
@@ -638,10 +691,10 @@ class kogesclass:
         if display_count:
             display(count)
 
-        _kg.x = [x for x in df_sdfilter.columns if x != y]
+        _kg.x = [x for x in df_filter.columns if x != y]
         _kg.SAVE["dropdata"] = result
         _kg.SAVE["count"] = count
-        _kg.data = df_sdfilter
+        _kg.data = df_filter
         return _kg
 
     @staticmethod
@@ -744,23 +797,15 @@ class kogesclass:
                 classes = ["(-)", "(+)"]
                 datas[0], datas[1] = df[df[y] == 0], df[df[y] == 1]
             elif custom_split:
-                if len(custom_split.keys()) == 1:
-                    k = list(custom_split.keys())[0]
-                    display_y = k
-                    custom_split["(+)"] = custom_split[k]
-                    del custom_split[k]
-                    custom_split["(-)"] = lambda x: [True] * len(x)
-
                 n_class = len(custom_split.keys())
                 classes = list(custom_split.keys())
 
+                df_remain = pd.DataFrame(df)
                 for i, f in enumerate(custom_split.values()):
-                    if datas.values():
-                        df_remain = pd.concat([df, pd.concat(datas.values())])
-                        df_remain = df_remain.drop_duplicates(keep=False)
-                        datas[i] = df_remain[f(df_remain)]
-                    else:
-                        datas[i] = df[f(df)]
+                    datas[i], df_remain = (
+                        df_remain[f(df_remain)],
+                        df_remain[~f(df_remain)],
+                    )
             else:
                 n_class = n_class or 4
                 # 연속은 quantile을 기준으로 분리

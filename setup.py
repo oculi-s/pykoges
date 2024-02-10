@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="pykoges",
-    version="0.4.5",
+    version="0.5.0",
     packages=find_packages(),
     install_requires=[
         "openpyxl",

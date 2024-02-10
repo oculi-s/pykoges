@@ -637,7 +637,7 @@ class kogesclass:
                 len(df[df["sex"] == "1"]),
                 len(df[df["sex"] == "2"]),
                 "100%",
-                len(df.columns),
+                len(df.columns) - len(set(_kg.drop_list)),
             ],
             [
                 "Y값 결측치 제거",
@@ -661,7 +661,8 @@ class kogesclass:
                 "",
                 "",
                 f"{int((n2-n1)/n*100)}%",
-                (len(df_drop.columns) - len(df_var.columns)) or "",
+                (len(df_drop.columns) - len(df_var.columns) + len(set(_kg.drop_list)))
+                or "",
             ],
             (filter_right_alpha != float("inf") or filter_left_alpha != float("inf"))
             and [

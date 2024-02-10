@@ -160,7 +160,7 @@ name_map = {
     "rbc": "RBC",
     "stiffness": "Stiffness",
     "t_bil": "T.Bilirubin",
-    "tchl": "Cholesterol",
+    "tchl": "TC",
     "tg": "TG",
     "u_ket": "U.ketone",
     "u_ph": "U.pH",

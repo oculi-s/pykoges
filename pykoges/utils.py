@@ -98,6 +98,20 @@ def df_to_img(df, path, title=None):
         dfi.export(df, path)
 
 
+def get_first_col(df):
+    if len(df.shape) > 1:
+        if df.shape[1] > 1:
+            df = df.iloc[:, 1]
+    return df
+
+
+def remove_duplicate_col(df):
+    import pandas as pd
+
+    df = pd.DataFrame(df)
+    return df.loc[:, ~df.columns.duplicated()].copy()
+
+
 eps = 1e-9
 # 변수, 함수에 맞춰 새로운 변수를 만들어줍니다. (차원축소/확장)
 div = lambda a, b: a / (b + eps) * 100
@@ -121,6 +135,7 @@ name_map = {
     "fvc": "FVC",
     # "gripl1": "",
     "gripr1": "악력",
+    "grip": "악력",
     # "grwhich": "",
     "hb": "Hb",
     "hct": "Hct",
@@ -137,7 +152,7 @@ name_map = {
     "mch": "MCH",
     "mchc": "MCHC",
     "mcv": "MCV",
-    "muscle": "근육량",
+    "muscle": "SLM",
     "skeletal_muscle": "골격근량",
     "plat": "PLT",
     "pulse": "맥박",

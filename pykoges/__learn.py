@@ -58,10 +58,15 @@ class modelclass:
     def __scale(koges, scaler):
         import pandas as pd
         from pykoges.__koges import KogesData
+        from .utils import remove_duplicate_col, get_first_col
 
         _kg = KogesData.copy(koges)
         X = _kg.data[_kg.x].astype(float)
         Y = _kg.data[_kg.y[0]]
+
+        X = remove_duplicate_col(X)
+        Y = get_first_col(Y)
+
         Y = Y.reset_index(drop=True)
         scaler = scaler()
         X_scaled = pd.DataFrame(scaler.fit_transform(X), columns=_kg.x)
@@ -70,11 +75,15 @@ class modelclass:
 
     @staticmethod
     def __split(koges):
+        from .utils import remove_duplicate_col, get_first_col
         from sklearn.model_selection import train_test_split
         import random
 
         X = koges.data[koges.x].astype(float)
         y = koges.data[koges.y[0]]
+        X = remove_duplicate_col(X)
+        y = get_first_col(y)
+
         val_rate = 0.2
         random_state = random.randint(1, 100)
         X_train, X_test, y_train, y_test = train_test_split(
@@ -161,71 +170,126 @@ class modelclass:
             plt.close()
 
         self.koges.SAVE[name] = result
-        self.model = model
+        self.coef = model.coef_
+        self.bias = model.intercept_
         self.r2 = r2
 
-    def logistic(self, isdisplay=True):
-        from sklearn.linear_model import LogisticRegression
-        from sklearn.metrics import (
-            roc_curve,
-            auc,
-        )
+    def logistic(
+        self,
+        isdisplay=True,
+        printCost=False,
+        display_best=False,
+        learning_rate=0.01,
+        threshold=0.5,
+        max_iter=1000000,
+    ):
+        from sklearn.metrics import roc_curve, auc
 
         from .utils import name_map
         import matplotlib.pyplot as plt
         from pykoges.__koges import KogesData
+        import numpy as np
 
         if not hasattr(self.koges, "data_binary"):
             raise ValueError("binary dataset이 정의되지 않았습니다.")
 
         y = self.koges.y[0]
-
-        ncol = len(self.scalers)
         plt.ioff()
-        fig, ax = plt.subplots(
-            nrows=1,
-            ncols=ncol,
-            figsize=(ncol * 3, 3.5),
-            constrained_layout=True,
-            sharey=True,
-        )
         _kg = KogesData.copy(self.koges)
-        models, roc_aucs = [], []
+
+        def sigmoid(z):
+            return 1 / (1 + np.exp(-z))
+
+        def compute_cost(X, y, W):
+            m = len(y)
+            h = sigmoid(X.dot(W))
+            cost = -1 / m * (y.T.dot(np.log(h)) + (1 - y).T.dot(np.log(1 - h)))
+            return cost
+
+        models, roc_aucs, fprs, tprs = [], [], [], []
         for i, scaler in enumerate(self.scalers):
             _kg.data = _kg.data_binary
             _kg.data[y] = _kg.data[y].astype(int)
 
             _kg = modelclass.__scale(_kg, scaler=scaler)
             X_train, X_test, y_train, y_test = modelclass.__split(koges=_kg)
-            model = LogisticRegression(max_iter=5000)
-            model.fit(X_train, y_train)
 
-            y_pred_prob = model.predict_proba(X_test)[:, 1]
+            # add bias
+            X_train = np.c_[np.ones((X_train.shape[0], 1)), X_train]
+            X_test = np.c_[np.ones((X_test.shape[0], 1)), X_test]
+
+            cnt = 0
+            _W = np.random.randn(X_train.shape[1])
+            if printCost:
+                print(scaler.__name__)
+            while cnt < max_iter:
+                h = sigmoid(X_train.dot(_W))
+                grad = X_train.T.dot(h - y_train) / len(y)
+                _W -= learning_rate * grad
+                cost = compute_cost(X_train, y_train, _W)
+                if printCost and cnt % 10000 == 0:
+                    print(f"iter: {cnt} cost: {cost}")
+                if cost < threshold:
+                    break
+                cnt += 1
+
+            y_pred_prob = sigmoid(X_test.dot(_W))
             fpr, tpr, _ = roc_curve(y_test, y_pred_prob)
+            fprs.append(fpr)
+            tprs.append(tpr)
             roc_auc = auc(fpr, tpr)
 
-            y_name = self.koges.display_y or name_map.get(y, y)
-            plt.subplot(1, ncol, i + 1)
-            plt.plot(
-                fpr, tpr, color="grey", lw=2, label=f"ROC curve (auc = {roc_auc:.2f})"
-            )
-            plt.plot([0, 1], [0, 1], color="navy", lw=2, linestyle="--")
-            plt.title(f"{y_name} ({scaler.__name__})")
-            plt.legend(loc="lower right")
-
-            models.append(model)
+            models.append(_W)
             roc_aucs.append(roc_auc)
 
-        fig.supxlabel("FPR")
-        fig.supylabel("TPR")
-        fig.suptitle("ROC curve")
+        y_name = self.koges.display_y or name_map.get(y, y)
+        if display_best:
+            best_idx = roc_aucs.index(max(roc_aucs))
+
+            fig = plt.figure(figsize=(5, 4))
+            plt.plot(
+                fprs[best_idx],
+                tprs[best_idx],
+                color="grey",
+                lw=2,
+                label=f"ROC curve (auc= {roc_aucs[best_idx]:.2f})",
+            )
+            plt.plot([0, 1], [0, 1], color="navy", lw=2, linestyle="--")
+            plt.title(f"{y_name} ({self.scalers[best_idx].__name__})")
+            plt.legend(loc="lower right")
+            self.koges.SAVE["LogisticRegression"] = fig
+        else:
+            ncol = len(self.scalers)
+            fig, ax = plt.subplots(
+                nrows=1,
+                ncols=ncol,
+                figsize=(ncol * 3, 3.5),
+                constrained_layout=True,
+                sharey=True,
+            )
+            for i, scaler in enumerate(self.scalers):
+                plt.subplot(1, ncol, i + 1)
+                plt.plot(
+                    fprs[i],
+                    tprs[i],
+                    color="grey",
+                    lw=2,
+                    label=f"ROC curve (auc = {roc_aucs[i]:.2f})",
+                )
+                plt.plot([0, 1], [0, 1], color="navy", lw=2, linestyle="--")
+                plt.title(f"{y_name} ({scaler.__name__})")
+                plt.legend(loc="lower right")
+
+                fig.supxlabel("False Positive Rate")
+                fig.supylabel("True Positive Rate")
+                fig.suptitle("ROC curve")
+            self.koges.SAVE["LogisticRegression"] = fig
         if isdisplay:
             plt.show()
         plt.close()
 
-        model = models[roc_aucs.index(max(roc_aucs))]
-        self.koges.SAVE["LogisticRegression"] = fig
-        self.model = model
+        _W = models[roc_aucs.index(max(roc_aucs))]
+        self.bias, self.coef = _W[0], _W[1:]
         self.roc_auc = roc_auc
 
     def __muticlassRoc(self, result, isdisplay=True):
@@ -270,6 +334,10 @@ class modelclass:
         display_roc_curve=True,
         display_confusion_matrix=True,
         display_best=False,
+        printCost=False,
+        learning_rate=0.01,
+        threshold=0.5,
+        max_iter=1000000,
     ):
         from pykoges.__koges import KogesData
 
@@ -285,7 +353,6 @@ class modelclass:
             raise ValueError("multiclass dataset이 정의되지 않았습니다.")
 
         self.results = []
-        threshold = 0.01
         y = self.koges.y[0]
         _kg = KogesData.copy(self.koges)
         for i, scaler in enumerate(self.scalers):
@@ -295,12 +362,11 @@ class modelclass:
             _kg = modelclass.__scale(_kg, scaler=scaler)
             X_train, X_test, y_train, y_test = modelclass.__split(_kg)
 
-            lr = 0.01
-            _W = np.random.randn(X_train.shape[1], _kg.n_class) / np.sqrt(
-                X_train.shape[1] / 2
-            )
-            # model.fit의 과정, n번 학습
-            for _ in range(10000):
+            cnt = 0
+            _W = np.random.randn(X_train.shape[1], _kg.n_class)
+            if printCost:
+                print(scaler.__name__)
+            while cnt < max_iter:
                 z = np.dot(X_train, _W)
 
                 predictions = z - (z.max(axis=1).reshape([-1, 1]))
@@ -312,7 +378,8 @@ class modelclass:
                 cost /= sample_size
                 cost += (1e-5 * (_W**2).sum()) / 2
 
-                # cost가 threshold미만이면 중단
+                if printCost and cnt % 10000 == 0:
+                    print(f"iter: {cnt} cost: {cost}")
                 if cost < threshold:
                     break
 
@@ -320,7 +387,8 @@ class modelclass:
                 grad = np.dot(X_train.transpose(), softmax) / sample_size
                 grad += 1e-5 * _W
 
-                _W -= lr * grad
+                _W -= learning_rate * grad
+                cnt += 1
 
             prediction = np.dot(X_test, _W)
             self.results.append(
@@ -341,8 +409,8 @@ class modelclass:
                 plt.title(f"{r.scaler.__name__} (accuracy={r.accuracy:.2f})")
                 self.__muticlassRoc(result=r)
 
-            fig.supxlabel("FPR")
-            fig.supylabel("TPR")
+            fig.supxlabel("False Positive Rate")
+            fig.supylabel("True Positive Rate")
             fig.suptitle("Multiclass ROC curve")
             if display_roc_curve:
                 plt.show()
@@ -356,29 +424,49 @@ class modelclass:
             )
             for i, r in enumerate(self.results):
                 plt.subplot(1, ncol, i + 1)
-                sns.heatmap(r.conf_matrix, annot=True, fmt="d", cmap="Blues")
+                sns.heatmap(
+                    r.conf_matrix,
+                    annot=True,
+                    fmt="d",
+                    cmap="Blues",
+                    xticklabels=self.koges.classes,
+                    yticklabels=self.koges.classes,
+                )
                 plt.title(f"Softmax ({r.scaler.__name__})")
             fig2.suptitle("Confusion matrix")
             if display_confusion_matrix:
                 plt.show()
+            self.koges.SAVE["multiclassRoc"] = fig
+            self.koges.SAVE["softmaxClassifier"] = fig2
         else:
             r = self.__get_best()
-            fig = plt.figure(figsize=(5, 4))
-            plt.title(f"{r.scaler.__name__} (accuracy={r.accuracy:.2f})")
+            fig, ax = plt.subplots(
+                nrows=1,
+                ncols=2,
+                figsize=(9, 4),
+                constrained_layout=True,
+                sharey=False,
+            )
+            # plt.title(f"{r.scaler.__name__} (accuracy={r.accuracy:.2f})")
+            plt.subplot(1, 2, 1)
             self.__muticlassRoc(result=r)
-            plt.xlabel("FPR")
-            plt.ylabel("TPR")
-            if display_roc_curve:
-                plt.show()
+            plt.xlabel("False Positive Rate")
+            plt.ylabel("True Positive Rate")
 
-            fig2 = plt.figure(figsize=(5, 4))
-            sns.heatmap(r.conf_matrix, annot=True, fmt="d", cmap="Blues")
-            plt.title(f"Softmax ({scaler.__name__})")
-            if display_confusion_matrix:
-                plt.show()
+            plt.subplot(1, 2, 2)
+            sns.heatmap(
+                r.conf_matrix,
+                annot=True,
+                fmt="d",
+                cmap="Blues",
+                xticklabels=self.koges.classes,
+                yticklabels=self.koges.classes,
+            )
+            fig.suptitle(f"Softmax ({scaler.__name__})")
 
-        self.koges.SAVE["multiclassRoc"] = fig
-        self.koges.SAVE["softmaxClassifier"] = fig2
+            if display_roc_curve or display_confusion_matrix:
+                plt.show()
+            self.koges.SAVE["softmaxClassifier"] = fig
 
     def equation(
         self,
@@ -389,16 +477,12 @@ class modelclass:
         from IPython.display import display, Math
 
         # LaTeX 형식의 모델 식 생성
-        if not self.model or isdiscrete(self.koges.q, self.koges.y[0]):
+        if isdiscrete(self.koges.q, self.koges.y[0]):
             return
-        if not hasattr(self.model, "intercept_"):
+        if not hasattr(self, "coef") or not hasattr(self, "bias"):
             return
-        if isinstance(self.model, LinearRegression):
-            b = "{:.2f}".format(self.model.intercept_)
-            W = ["{:.2f}".format(x) for x in self.model.coef_]
-        else:
-            b = "{:.2f}".format(self.model.intercept_[0])
-            W = ["{:.2f}".format(x) for x in self.model.coef_[0]]
+        b = "{:.2f}".format(self.bias)
+        W = ["{:.2f}".format(x) for x in self.coef]
         lines = []
         X = [name_map.get(x, x) for x in self.koges.x]
         for w, x in sorted(zip(W, X), reverse=True):

@@ -428,7 +428,7 @@ class kogesclass:
     ):
         import numpy as np
         import pandas as pd
-        from pykoges.utils import div, mul, name_map
+        from .utils import div, mul, name_map, missing
 
         _kg = KogesData.copy(koges)
         df = pd.DataFrame(_kg.data)
@@ -443,6 +443,10 @@ class kogesclass:
         _kg.option["abi_of_grwhich"] = abi_of_grwhich
         _kg.option["weight_height_bmi"] = weight_height_bmi
         _kg.option["custom_functions"] = custom_functions
+        # 코딩북 결측치 조건에 맞게 제거
+
+        if "hdl" in df and "tg" in df and "tchl" in df:
+            df["ldl"] = df["tchl"] - df["hdl"] - 0.2 * df["tg"]
 
         # 1. weight, height로 BMI를 계산합니다.
         if weight_height_bmi:
@@ -549,7 +553,8 @@ class kogesclass:
                 if set(x).issubset(_kg.y):
                     _kg.y = [c]
 
-        _kg.data = df.drop(set(drop_list), axis=1)
+        _kg.drop_list = drop_list
+        _kg.data = df
         return _kg
 
     def drop(
@@ -567,8 +572,8 @@ class kogesclass:
         from IPython.display import HTML, display
         from sklearn.impute import KNNImputer
 
-        from pykoges.datatype import Question
-        from pykoges.utils import arr_to_df
+        from .datatype import Question
+        from .utils import arr_to_df, missing
 
         _kg = KogesData.copy(koges)
         df = pd.DataFrame(_kg.data)
@@ -599,6 +604,17 @@ class kogesclass:
         # 변수를 하나라도 가지지 않은 경우 제거
         df_drop = df_var.dropna(axis=0, how="any")
         df_drop = df_drop.dropna(axis=1, how="all")
+        # 코딩북 조건에 맞게 결측치 제거
+        n = len(df_drop)
+        for x in df_drop.columns:
+            v = missing.get(x, False)
+            if v:
+                if isinstance(v, list):
+                    df_drop = df_drop[~df_drop[x].astype(float).isin(v)]
+                else:
+                    df_drop = df_drop[df_drop[x].astype(float) != v]
+        print(f"코딩북 결측치 조건에 맞게 {n-len(df_drop)}개 데이터 제거됨.")
+        df_drop = df_drop.drop(set(_kg.drop_list), axis=1)
         # dropNorm으로 정규분포를 벗어나는 데이터 제거
         df_sdfilter = kogesclass.__drop_norm(
             df_drop, _kg.q, right_alpha=filter_right_alpha, left_alpha=filter_left_alpha
@@ -778,7 +794,6 @@ class kogesclass:
         n_class=4,
         isdisplay=True,
         custom_split={},
-        display_y="",
     ):
         import pandas as pd
         from pykoges.utils import ekg_map, name_map
@@ -787,7 +802,6 @@ class kogesclass:
         y = _kg.y[0]
         datas = {}
         col_r1 = []
-        n = 2
         if _kg.type == "binary" or _kg.type == "continuous":
             df = pd.DataFrame(_kg.data)
             # binary 혹은 연속변수
@@ -820,7 +834,8 @@ class kogesclass:
                     datas[i][y] = i
             for i in range(n_class):
                 # quan = df[y].quantile(1 / n_class * (i + 1))
-                col_r1 += [f"{display_y or y} {classes[i]}\n(n={len(datas[i])})"] * n
+                n = len(datas[i])
+                col_r1 += [f"{classes[i]}\n{n}({n/len(df)*100:.2f})"]
             _kg.classes = classes
             _kg.n_class = n_class
         else:
@@ -838,10 +853,11 @@ class kogesclass:
             df = pd.DataFrame(_kg.data)
             for i, x in enumerate(_kg.classes):
                 datas[i] = df[df[y] == i]
-                col_r1 += [f"{name_map.get(x,x)}\n(n={len(datas[i])})"] * n
-        col_r2 = ["평균", "95%CI"] * n_class + ["p-value"]
+                n = len(datas[i])
+                col_r1 += [f"{name_map.get(x,x)}\n{n}({n/len(df)*100:.2f})"]
+        # col_r2 = ["평균", "95%CI"] * n_class + ["p-value"]
+        col_r2 = ["평균"] * n_class + [""]
 
-        _kg.display_y = display_y
-        _kg.columns = [col_r1 + ["H1"], col_r2]
+        _kg.columns = [col_r1 + ["p"], col_r2]
         _kg.datas = datas
         return _kg

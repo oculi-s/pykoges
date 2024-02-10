@@ -107,8 +107,10 @@ def t_test(koges, p_threshold=0.05):
             lower, upper = stats.t.interval(
                 0.95, len(data) - 1, loc=mean, scale=stats.sem(data)
             )
-            ci = f"{lower:.2f} - {upper:.2f}"
-            row += [f"{mean:.2f}", ci]
+            ci = upper - mean
+            # ci = f"{lower:.2f} - {upper:.2f}"
+            # row += [f"{mean:.2f}", ci]
+            row += [f"{mean:.2f}±{ci:.2f}"]
         # H0 (귀무가설) : 두 집단의 평균이 같다
         # H1 (대립가설) : 두 집단의 평균이 다르다
         t, p_value = stats.ttest_ind(_kg.datas[0][x], _kg.datas[1][x])
@@ -156,8 +158,10 @@ def anova(koges, p_threshold=0.05):
                 loc=mean,
                 scale=stats.sem(data),
             )
-            ci = f"{lower:.2f} - {upper:.2f}"
-            row += [f"{mean:.2f}", ci]
+            ci = upper - mean
+            # ci = f"{lower:.2f} - {upper:.2f}"
+            # row += [f"{mean:.2f}", ci]
+            row += [f"{mean:.2f}±{ci:.2f}"]
         # H0 : 모든 그룹의 평균이 같다. (p>=th)
         # H1 : 어떤 그룹은 평균이 다르다. (p<th)
         F, p_value = stats.f_oneway(*df_list)
@@ -183,7 +187,6 @@ def split(
     with_homogenity=False,
     isdisplay=True,
     custom_split={},
-    display_y="",
 ):
     from .__koges import KogesData, kogesclass
 
@@ -202,7 +205,6 @@ def split(
         n_class=n_class,
         isdisplay=isdisplay,
         custom_split=custom_split,
-        display_y=display_y,
     )
     # 3. 등분산성 검정
     if with_homogenity:
@@ -216,7 +218,7 @@ def summary(
     isdisplay=True,
     p_threshold=0.05,
 ):
-    from .utils import name_map, isfloat
+    from .utils import name_map
 
     from IPython.display import display, HTML
     import pandas as pd, numpy as np

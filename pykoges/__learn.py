@@ -242,7 +242,7 @@ class modelclass:
             models.append(_W)
             roc_aucs.append(roc_auc)
 
-        y_name = self.koges.display_y or name_map.get(y, y)
+        y_name = name_map.get(y, y)
         if display_best:
             best_idx = roc_aucs.index(max(roc_aucs))
 
@@ -491,7 +491,7 @@ class modelclass:
             lines.append(f"{w} \\times \\text{{{x}}}")
 
         y = self.koges.y[0]
-        y = self.koges.display_y or name_map.get(y, y)
+        y = name_map.get(y, y)
         line = "".join(lines)
         if isinstance(self.model, LinearRegression):
             equation = f""" y({y}) = {b} {line}"""

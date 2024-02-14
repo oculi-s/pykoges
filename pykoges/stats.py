@@ -273,7 +273,7 @@ def boxplot(koges, isdisplay=True, ncol=8):
     boxplot, ax = plt.subplots(
         nrows=nrow,
         ncols=ncol,
-        figsize=(ncol * 1.5, nrow * 2),
+        figsize=(ncol * 2.5, nrow * 3),
         constrained_layout=True,
         sharey=False,
     )
@@ -384,7 +384,7 @@ def scatter(koges, isdisplay=True, ncol=8):
     fig, axis = plt.subplots(
         nrows=nrow,
         ncols=ncol,
-        figsize=(ncol * 1.8, nrow * 2),
+        figsize=(ncol * 2.5, nrow * 3),
         constrained_layout=True,
         sharey=True,
     )
@@ -393,9 +393,11 @@ def scatter(koges, isdisplay=True, ncol=8):
         plt.subplot(nrow, ncol, i + 1)
         df_class = get_first_col(_kg.data[x])
         df_y = get_first_col(_kg.data[key])
-        plt.scatter(df_class, df_y, alpha=0.1)
+        coef = float(_kg.correlation[x])
+        plt.scatter(df_class, df_y, alpha=0.1, label=f"PCC={coef:.3f}")
         # plt.title(f'{x} - {y_code}')
         plt.xlabel(name_map.get(x, x))
+        plt.legend(loc="lower right")
 
     fig.supylabel(name_map.get(key, key))
     fig.suptitle("Scatter plot")

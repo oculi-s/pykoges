@@ -516,6 +516,14 @@ class kogesclass:
             if "armrm" in df and "armlm" in df and "legrm" in df and "leglm" in df:
                 df["asm"] = df["armrm"] + df["armlm"] + df["legrm"] + df["leglm"]
                 drop_list += ["armrm", "armlm", "legrm", "leglm"]
+                if (
+                    "armrm" in _kg.y
+                    and "armlm" in _kg.y
+                    and "legrm" in _kg.y
+                    and "leglm" in _kg.y
+                ):
+                    _kg.y = ["asm"]
+                    _kg.type = "continuous"
 
         # 흡연, 음주
         if "smam" in df:

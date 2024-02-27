@@ -164,7 +164,6 @@ class modelclass:
 
             name = model.__class__.__name__
             result = [
-                ["모델", name],
                 ["Scaler", scaler.__name__],
                 ["MAE", f"{mae:.4f}"],
                 ["MSE", f"{mse:.4f}"],

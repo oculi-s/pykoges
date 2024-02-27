@@ -119,7 +119,7 @@ mul = lambda a, b: a * b
 
 
 name_map = {
-    "age": "Age",
+    "age": "연령",
     "albumin": "Albumin",
     "alt": "ALT",
     "ast": "AST",
@@ -181,6 +181,34 @@ name_map = {
     "legrm": "오른다리근육량",
     "leglm": "왼다리근육량",
     "asm": "ASM",
+}
+
+unit_map = {
+    "grip": "kg",
+    "weight": "kg",
+    "age": "y",
+    "height": "cm",
+    "pulse": "회/분",
+    "bun": "mg/dL",
+    "creatine": "mg/dL",
+    "hb": "g/dL",
+    "hct": "%",
+    "rbc": "106/μL",
+    "plat": "103/μL",
+    "mch": "pg",
+    "hdl": "mg/dL",
+    "tg": "mg/dL",
+    "ldl": "mg/dL",
+    "tchl": "mg/dL",
+    "r_gtp": "IU/L",
+    "albumin": "g/dL",
+    "crp": "mg/L",
+    "drinkaw": "소주잔",
+    "smokepy": "py",
+    #
+    "(WBC/UA)": "10/pg",
+    "(팔둘레/ABI)": "cm",
+    "(MCHC/MCV)": "10-1g/fL",
 }
 
 ekg_map = {

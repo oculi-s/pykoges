@@ -147,6 +147,7 @@ class KogesData:
 
     def save(
         self,
+        model,
         isdisplay=True,
         issave=True,
     ):
@@ -156,9 +157,9 @@ class KogesData:
         from tqdm.notebook import tqdm
         from datetime import datetime as dt
 
-        y = self.y[0]
-        self.SAVE["time"] = dt.today().strftime("%y%m%d_%H%M")
-        d = os.path.join("./result", f'{self.SAVE["time"]}_{y.upper()}')
+        self.SAVE["time"] = dt.today().strftime("%m%d_%H%M")
+        dirname = f'{self.SAVE["time"]}_{("B" if self.n_class==2 else "M")}_{model.auc}'
+        d = os.path.join("./result", dirname)
         if not os.path.exists(d) and issave:
             os.makedirs(d, exist_ok=True)
 
@@ -192,13 +193,14 @@ class KogesData:
             display(inputs)
         order = [
             "LinearRegression",
-            "RandomForestRegressor",
             "LogisticRegression",
+            "SoftmaxClassifier",
+            "RocCurve",
             #
-            "DecisionTreeClassifier",
-            "RandomForestClassifier",
-            "softmaxClassifier",
-            "multiclassRoc",
+            "ScoreMinMaxScaler",
+            "ScoreRobustScaler",
+            "ScoreMaxAbsScaler",
+            "ScoreStandardScaler",
             #
             "option",
             "input",
@@ -857,8 +859,8 @@ class kogesclass:
                 n = len(datas[i])
                 col_r1 += [f"{name_map.get(x,x)}\n{n}({n/len(df)*100:.2f})"]
         # col_r2 = ["평균", "95%CI"] * n_class + ["p-value"]
-        col_r2 = ["평균"] * n_class + [""]
+        # col_r2 = ["평균"] * n_class + [""]
 
-        _kg.columns = [col_r1 + ["p"], col_r2]
+        _kg.columns = col_r1 + ["p"]
         _kg.datas = datas
         return _kg

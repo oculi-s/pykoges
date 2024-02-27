@@ -218,7 +218,7 @@ def summary(
     isdisplay=True,
     p_threshold=0.05,
 ):
-    from .utils import name_map
+    from .utils import name_map, unit_map
 
     from IPython.display import display, HTML
     import pandas as pd, numpy as np
@@ -229,7 +229,13 @@ def summary(
     summary = summary.sort_values(by=summary.columns[-1])
     index, summary = summary.iloc[:, 0], summary.iloc[:, 1:]
     summary.columns = list(_kg.columns)
-    summary.index = list(index.replace(name_map))
+    summary.index = list(
+        [
+            f"{name_map.get(x,x)} {(f'({unit_map[x]})' if x in unit_map else '')}"
+            for x in index
+        ]
+    )
+    # 0.05를 기준으로 분리
     idx = np.argmin(np.abs(summary.iloc[:, -1] - p_threshold)) + 1
     if idx < summary.shape[0]:
         summary = pd.concat(
@@ -245,7 +251,16 @@ def summary(
         lambda p: ("< 0.001" if p < 0.001 else f"{p:.3f}") if p else p
     )
     summary = summary.style.set_table_styles(
-        [dict(selector="th", props=[("text-align", "center"), ("white-space", "pre")])]
+        [
+            dict(
+                selector="thead th",
+                props=[("text-align", "center"), ("white-space", "pre")],
+            ),
+            dict(
+                selector="tbody th:first-child",
+                props=[("text-align", "left")],
+            ),
+        ]
     )
     _kg.SAVE["statistics"] = summary
     if isdisplay:
@@ -285,12 +300,7 @@ def boxplot(koges, isdisplay=True, ncol=8):
         plt.subplot(nrow, ncol, _ + 1)
         sns.boxplot(data=df_list, palette="Set3", showfliers=False)
         plt.xlabel(name_map.get(x, x))
-        if _kg.n_class == 2:
-            plt.xticks(range(_kg.n_class), _kg.classes)
-        elif isdiscrete(_kg.q, _kg.y[0]):
-            plt.xticks(range(_kg.n_class))
-        else:
-            plt.xticks(range(_kg.n_class), [f"Q{i+1}" for i in range(_kg.n_class)])
+        plt.xticks(range(_kg.n_class), _kg.classes)
     plt.suptitle("Boxplot")
     if isdisplay:
         print("-----------------------")

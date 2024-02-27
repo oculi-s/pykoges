@@ -95,7 +95,7 @@ def df_to_img(df, path, title=None):
         with open(path, "w") as f:
             f.write(df.to_html().replace("\\n", "<br>"))
     else:
-        dfi.export(df, path)
+        dfi.export(df, path, table_conversion="matplotlib")
 
 
 def get_first_col(df):

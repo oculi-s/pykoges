@@ -11,6 +11,18 @@ __all__ = [
 ]
 
 
+def __set__font(plt):
+    import matplotlib.font_manager as fm
+    import os
+
+    fontPath = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "NanumGothic.ttf"
+    )
+    fm.fontManager.addfont(fontPath)
+    plt.rcParams["font.family"] = fm.FontProperties(fname=fontPath).get_name()
+    plt.rcParams["axes.unicode_minus"] = False
+
+
 def normality(
     koges,
     p_threshold=0.05,
@@ -270,17 +282,13 @@ def summary(
 
 
 def boxplot(koges, isdisplay=True, ncol=8):
-    from .utils import isdiscrete
     from .utils import name_map
     from .utils import get_first_col
 
     import seaborn as sns
     import matplotlib.pyplot as plt
 
-    sns.set(font="Malgun Gothic")
-    plt.rcParams["font.family"] = "Malgun Gothic"
-    plt.rcParams["axes.unicode_minus"] = False
-
+    __set__font(plt)
     _kg = koges
     ncol = min(ncol, len(_kg.x))
     nrow = (len(_kg.x) + ncol - 1) // ncol
@@ -311,7 +319,6 @@ def boxplot(koges, isdisplay=True, ncol=8):
     _kg.SAVE["boxplot"] = boxplot
 
 
-@staticmethod
 def __correlation_key(koges):
     from .utils import isdiscrete, isbinary
 
@@ -329,14 +336,10 @@ def correlation(koges, isdisplay=True):
     from .utils import name_map, remove_duplicate_col
 
     from IPython.display import display
-    import pandas as pd
     import seaborn as sns
     import matplotlib.pyplot as plt
 
-    sns.set(font="Malgun Gothic")
-    plt.rcParams["font.family"] = "Malgun Gothic"
-    plt.rcParams["axes.unicode_minus"] = False
-
+    __set__font(plt)
     _kg = koges
     if _kg.data.empty:
         print("조건을 만족하는 데이터가 존재하지 않습니다.")
@@ -373,13 +376,9 @@ def scatter(koges, isdisplay=True, ncol=8):
     from .utils import iscontinuous, name_map
     from .utils import get_first_col
 
-    import seaborn as sns
     import matplotlib.pyplot as plt
 
-    sns.set(font="Malgun Gothic")
-    plt.rcParams["font.family"] = "Malgun Gothic"
-    plt.rcParams["axes.unicode_minus"] = False
-
+    __set__font(plt)
     _kg = koges
     if _kg.correlation is None or _kg.correlation.empty:
         print("조건을 만족하는 데이터가 존재하지 않습니다.")

@@ -81,6 +81,7 @@ class modelclass:
         }
         self.koges = koges
         self.scalers = [v for k, v in _scalers.items() if k in scalers]
+        self.scalers_fit = self.scalers
         self.model = None
         self.results = []
         self.split_ratio = split_ratio
@@ -108,10 +109,10 @@ class modelclass:
         Y = get_first_col(Y)
 
         Y = Y.reset_index(drop=True)
-        scaler = scaler()
+        scaler = scaler().fit(X)
         X_scaled = pd.DataFrame(scaler.fit_transform(X), columns=_kg.x)
         _kg.data = pd.concat([X_scaled, Y], axis=1)
-        return _kg
+        return _kg, scaler
 
     @staticmethod
     def __split(koges, split_ratio, random_state):
@@ -148,7 +149,9 @@ class modelclass:
         models, r2s, results = [], [], []
         for i, scaler in enumerate(self.scalers):
             _kg = KogesData.copy(self.koges)
-            _kg = modelclass.__scale(koges=self.koges, scaler=scaler)
+            _kg, self.scalers_fit[i] = modelclass.__scale(
+                koges=self.koges, scaler=scaler
+            )
             X_train, X_test, y_train, y_test = modelclass.__split(
                 koges=_kg, split_ratio=self.split_ratio, random_state=random_state
             )
@@ -176,8 +179,12 @@ class modelclass:
             models.append(model)
             r2s.append(r2)
         r2 = max(r2s)
-        model = models[r2s.index(max(r2s))]
-        result = results[r2s.index(max(r2s))]
+        best_idx = r2s.index(r2)
+        model, result, scaler = (
+            models[best_idx],
+            results[best_idx],
+            self.scalers_fit[best_idx],
+        )
         if isdisplay:
             display(result)
 
@@ -213,6 +220,7 @@ class modelclass:
             plt.close()
 
         self.koges.SAVE[name] = result
+        self.scaler = scaler
         self.coef = model.coef_
         self.bias = model.intercept_
         self.r2 = r2
@@ -259,7 +267,7 @@ class modelclass:
             _kg.data = _kg.data_binary
             _kg.data[y] = _kg.data[y].astype(int)
 
-            _kg = modelclass.__scale(_kg, scaler=scaler)
+            _kg, self.scalers_fit[i] = modelclass.__scale(_kg, scaler=scaler)
             X_train, X_test, y_train, y_test = modelclass.__split(
                 koges=_kg, split_ratio=self.split_ratio, random_state=random_state
             )
@@ -387,10 +395,12 @@ class modelclass:
         plt.close()
 
         auc = max(roc_aucs)
+        self.scaler = self.scalers_fit[roc_aucs.index(auc)]
         _W = models[roc_aucs.index(auc)]
         self.bias, self.coef = _W[0], _W[1:]
         self.auc = auc
 
+    @staticmethod
     def __muticlassRoc(self, result, isdisplay=True):
         from sklearn.metrics import roc_curve, auc
         import matplotlib.pyplot as plt
@@ -417,16 +427,19 @@ class modelclass:
             plt.legend(loc="lower right")
         return aucs
 
+    @staticmethod
     def __get_best(self):
         auc = 0
         best = False
-        for r in self.results:
+        scaler = 0
+        for i, r in enumerate(self.results):
             aucs = self.__muticlassRoc(result=r, isdisplay=False)
             auc_mean = sum(aucs) / len(aucs)
             if auc_mean > auc:
                 auc = auc_mean
                 best = r
-        return best, auc
+                scaler = self.scalers_fit[i]
+        return best, auc, scaler
 
     def softmax(
         self,
@@ -459,7 +472,7 @@ class modelclass:
             _kg.data = _kg.data_multiclass
             _kg.data[y] = _kg.data[y].astype(int)
 
-            _kg = modelclass.__scale(_kg, scaler=scaler)
+            _kg, self.scalers_fit[i] = modelclass.__scale(_kg, scaler=scaler)
             X_train, X_test, y_train, y_test = modelclass.__split(
                 koges=_kg, split_ratio=self.split_ratio, random_state=random_state
             )
@@ -571,14 +584,56 @@ class modelclass:
                 plt.show()
             self.koges.SAVE["RocCurve"] = fig
             self.koges.SAVE["SoftmaxClassifier"] = fig2
-        _, self.auc = self.__get_best()
+        _, self.auc, self.scaler = self.__get_best()
+
+    def scalerInfo(
+        self,
+        isdisplay=True,
+    ):
+        from sklearn.preprocessing import (
+            MinMaxScaler,
+            MaxAbsScaler,
+            RobustScaler,
+            StandardScaler,
+        )
+        from .utils import name_map, arr_to_df
+        from IPython.display import display
+
+        info = []
+        if isinstance(self.scaler, MinMaxScaler):
+            info += [["변수", "min", "max"]]
+            # (X-min) * (max-min)
+            for i, x in enumerate(self.scaler.feature_names_in_):
+                x = name_map.get(x, x)
+                info += [[x, self.scaler.data_min_[i], self.scaler.data_max_[i]]]
+        elif isinstance(self.scaler, MaxAbsScaler):
+            info += [["변수", "max abs"]]
+            # X/maxabs
+            for i, x in enumerate(self.scaler.feature_names_in_):
+                x = name_map.get(x, x)
+                info += [[x, self.scaler.max_abs_[i]]]
+        elif isinstance(self.scaler, RobustScaler):
+            info += [["변수", "median", "IQR (Q3-Q1)"]]
+            # (X-M)/IQR
+            for i, x in enumerate(self.scaler.feature_names_in_):
+                x = name_map.get(x, x)
+                info += [[x, self.scaler.center_[i], self.scaler.scale_[i]]]
+        elif isinstance(self.scaler, StandardScaler):
+            info += [["변수", "mean", "scale"]]
+            # (X-mean)/scale
+            for i, x in enumerate(self.scaler.feature_names_in_):
+                x = name_map.get(x, x)
+                info += [[x, self.scaler.mean_[i], self.scaler.scale_[i]]]
+        info = arr_to_df(info)
+        if isdisplay:
+            display(info)
+        self.koges.SAVE["ScalerInfo"] = info
 
     def equation(
         self,
         isdisplay=True,
     ):
         from pykoges.utils import isdiscrete, name_map
-        from sklearn.linear_model import LinearRegression
         from IPython.display import display, Math
 
         # LaTeX 형식의 모델 식 생성
@@ -598,7 +653,7 @@ class modelclass:
         y = self.koges.y[0]
         y = name_map.get(y, y)
         line = "".join(lines)
-        if isinstance(self.model, LinearRegression):
+        if self.koges.type == "continuous":
             equation = f""" y({y}) = {b} {line}"""
         else:
             equation = f"X = {b} {line}\n"

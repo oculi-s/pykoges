@@ -43,7 +43,9 @@ class codingbook:
 
         folder = os.path.abspath(folder_name)
         if not os.path.exists(folder):
-            raise FileExistsError("파일을 읽어올 경로가 존재하지 않습니다.\n폴더 이름을 다시 설정해주세요.")
+            raise FileExistsError(
+                "파일을 읽어올 경로가 존재하지 않습니다.\n폴더 이름을 다시 설정해주세요."
+            )
         # 중복실행을 대비해 초기 변수들을 비워줍니다.
         q = []
         # 확장자가 없거나 (폴더)

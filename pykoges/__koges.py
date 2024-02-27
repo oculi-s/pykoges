@@ -152,13 +152,19 @@ class KogesData:
         issave=True,
     ):
         import os
-        from pykoges.utils import name_map, arr_to_df_split, df_to_img
+        from pykoges.utils import name_map, arr_to_df_split, df_to_img, arr_to_df
         from IPython.display import display
         from tqdm.notebook import tqdm
         from datetime import datetime as dt
 
         self.SAVE["time"] = dt.today().strftime("%m%d_%H%M")
-        dirname = f'{self.SAVE["time"]}_{("B" if self.n_class==2 else "M")}_{model.auc}'
+
+        if self.type == "continuous":
+            dirname = f'{self.SAVE["time"]}_{("C")}_{model.r2}'
+        else:
+            dirname = (
+                f'{self.SAVE["time"]}_{("B" if self.n_class==2 else "M")}_{model.auc}'
+            )
         d = os.path.join("./result", dirname)
         if not os.path.exists(d) and issave:
             os.makedirs(d, exist_ok=True)
@@ -181,7 +187,7 @@ class KogesData:
         option = [["이름", "옵션"], *[[k, o.get(k, "-")] for k in keys]]
         X = [name_map.get(x, x) for x in self.x]
 
-        option = arr_to_df_split(option, n=3)
+        option = arr_to_df(option)
         inputs = arr_to_df_split(zip(self.x, X), column=["변수코드", "변수이름"])
         self.SAVE["option"] = option
         self.SAVE["input"] = inputs
@@ -201,6 +207,8 @@ class KogesData:
             "ScoreRobustScaler",
             "ScoreMaxAbsScaler",
             "ScoreStandardScaler",
+            #
+            "ScalerInfo",
             #
             "option",
             "input",

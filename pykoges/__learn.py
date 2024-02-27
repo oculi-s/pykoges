@@ -128,7 +128,10 @@ class modelclass:
         )
         return X_train, X_test, y_train, y_test
 
-    def linear(self, isdisplay=True):
+    def linear(
+        self,
+        isdisplay=True,
+    ):
         from IPython.display import display
         from sklearn.linear_model import LinearRegression
         from sklearn.metrics import (

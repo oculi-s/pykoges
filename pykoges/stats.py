@@ -331,7 +331,10 @@ def __correlation_key(koges):
     return koges.y[0]
 
 
-def correlation(koges, isdisplay=True):
+def correlation(
+    koges,
+    isdisplay=True,
+):
     from .utils import iscontinuous, arr_to_df_split
     from .utils import name_map, remove_duplicate_col
 
@@ -414,3 +417,11 @@ def scatter(koges, isdisplay=True, ncol=8):
         plt.show()
     plt.close()
     _kg.SAVE["scatter"] = fig
+
+
+def filterCorr(koges, drop_threshold=0.5):
+    from pykoges.__koges import KogesData
+
+    _kg = KogesData.copy(koges)
+    _kg.x = [x for x in _kg.x if abs(float(_kg.correlation[x])) >= drop_threshold]
+    return _kg

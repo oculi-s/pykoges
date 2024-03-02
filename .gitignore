@@ -1,6 +1,9 @@
 __pycache__/
-data_fixed/
 data/
+data_fixed/
+data_hanes/
+node_modules/
+
 dist/
 build/
 *.egg-info/

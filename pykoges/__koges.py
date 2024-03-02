@@ -159,7 +159,7 @@ class KogesData:
 
         self.SAVE["time"] = dt.today().strftime("%m%d_%H%M")
 
-        if self.type == "continuous":
+        if hasattr(model, "r2"):
             dirname = f'{self.SAVE["time"]}_{("C")}_{model.r2}'
         else:
             dirname = (
@@ -224,8 +224,11 @@ class KogesData:
             "importance",
         ]
         if "equation" in self.SAVE and issave:
-            with open(os.path.join(d, "equation.tex"), "w", encoding="utf-8") as f:
+            with open(os.path.join(d, "Equation.tex"), "w", encoding="utf-8") as f:
                 f.write(self.SAVE["equation"])
+        if "equationScale" in self.SAVE and issave:
+            with open(os.path.join(d, "EquationScale.tex"), "w", encoding="utf-8") as f:
+                f.write(self.SAVE["equationScale"])
         i = 0
         indexes = {order.index(x): x for x in self.SAVE.keys() if x in order}
         keys = [x[1] for x in sorted(indexes.items())]
@@ -327,6 +330,8 @@ class kogesclass:
             if "muscle" in _kg.x + _kg.y and data_type == "baseline" and year == "08":
                 continue
             path = os.path.join(folder_name, f"data_{data_type}_{year}.csv")
+            if not os.path.exists(path):
+                continue
 
             df = pd.read_csv(path, dtype=object)
             # 질문코드가 대문자로 되어있어 소문자로 변환해줍니다.
@@ -457,7 +462,18 @@ class kogesclass:
 
         if "hdl" in df and "tg" in df and "tchl" in df:
             df["ldl"] = df["tchl"] - df["hdl"] - 0.2 * df["tg"]
-
+        if "gripl1" in df and "gripl2" in df:
+            df["gripl1"] = df[["gripl1", "gripl2"]].max(axis=1)
+            drop_list += ["gripl2"]
+        if "gripl1" in df and "gripl3" in df:
+            df["gripl1"] = df[["gripl1", "gripl3"]].max(axis=1)
+            drop_list += ["gripl3"]
+        if "gripr1" in df and "gripr2" in df:
+            df["gripr1"] = df[["gripr1", "gripr2"]].max(axis=1)
+            drop_list += ["gripr2"]
+        if "gripr1" in df and "gripr3" in df:
+            df["gripr1"] = df[["gripr1", "gripr3"]].max(axis=1)
+            drop_list += ["gripr3"]
         # 1. weight, height로 BMI를 계산합니다.
         if weight_height_bmi:
             if "weight" in df and "height" in df:
@@ -570,7 +586,6 @@ class kogesclass:
                 drop_list += x
                 if set(x).issubset(_kg.y):
                     _kg.y = [c]
-
         _kg.drop_list = drop_list
         _kg.data = df
         return _kg
@@ -585,6 +600,7 @@ class kogesclass:
         data_impute=False,
         display_result=True,
         display_count=True,
+        age_from=0,
     ):
         import pandas as pd
         from IPython.display import HTML, display
@@ -595,6 +611,8 @@ class kogesclass:
 
         _kg = KogesData.copy(koges)
         df = pd.DataFrame(_kg.data)
+        if "age" in df:
+            df = df[df["age"] >= age_from]
 
         _kg.option["drop_threshold"] = drop_threshold
         _kg.option["filter_alpha"] = filter_right_alpha
@@ -632,6 +650,7 @@ class kogesclass:
                 else:
                     df_drop = df_drop[df_drop[x].astype(float) != v]
         print(f"코딩북 결측치 조건에 맞게 {n-len(df_drop)}개 데이터 제거됨.")
+        _kg.drop_list = [x for x in _kg.drop_list if x in df_drop]
         df_drop = df_drop.drop(set(_kg.drop_list), axis=1)
         # dropNorm으로 정규분포를 벗어나는 데이터 제거
         df_sdfilter = kogesclass.__drop_norm(

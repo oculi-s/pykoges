@@ -400,7 +400,6 @@ class modelclass:
         self.bias, self.coef = _W[0], _W[1:]
         self.auc = auc
 
-    @staticmethod
     def __muticlassRoc(self, result, isdisplay=True):
         from sklearn.metrics import roc_curve, auc
         import matplotlib.pyplot as plt
@@ -427,7 +426,6 @@ class modelclass:
             plt.legend(loc="lower right")
         return aucs
 
-    @staticmethod
     def __get_best(self):
         auc = 0
         best = False
@@ -631,10 +629,17 @@ class modelclass:
 
     def equation(
         self,
-        isdisplay=True,
+        display_unscaled=True,
+        display_scaled=True,
     ):
         from pykoges.utils import isdiscrete, name_map
         from IPython.display import display, Math
+        from sklearn.preprocessing import (
+            MaxAbsScaler,
+            MinMaxScaler,
+            StandardScaler,
+            RobustScaler,
+        )
 
         # LaTeX 형식의 모델 식 생성
         if isdiscrete(self.koges.q, self.koges.y[0]):
@@ -643,21 +648,43 @@ class modelclass:
             return
         b = "{:.2f}".format(self.bias)
         W = ["{:.2f}".format(x) for x in self.coef]
-        lines = []
+        lines, lines_scale = [], []
         X = [name_map.get(x, x) for x in self.koges.x]
-        for w, x in sorted(zip(W, X), reverse=True):
+        for w, (i, x) in list(zip(W, enumerate(X))):
+            if isinstance(self.scaler, MinMaxScaler):
+                min_ = self.scaler.data_min_[i]
+                max_ = self.scaler.data_max_[i]
+                x_scale = f"\\dfrac{{(\\text{{{x}}}-{min_:.2f})}}{{{(max_-min_):.2f}}}"
+            elif isinstance(self.scaler, MaxAbsScaler):
+                abs_ = self.scaler.max_abs_[i]
+                x_scale = f"\\dfrac{{\\text{{{x}}}}}{{{abs_:.2f}}}"
+            elif isinstance(self.scaler, RobustScaler):
+                med_ = self.scaler.center_[i]
+                iqr_ = self.scaler.scale_[i]
+                x_scale = f"\\dfrac{{(\\text{{{x}}}-{med_:.2f})}}{{{iqr_:.2f}}}"
+            elif isinstance(self.scaler, StandardScaler):
+                mean_ = self.scaler.mean_[i]
+                std_ = self.scaler.scale_[i]
+                x_scale = f"\\dfrac{{(\\text{{{x}}}-{mean_:.2f})}}{{{std_:.2f}}}"
             if float(w) >= 0:
                 w = "+ " + w
-            lines.append(f"{w} \\times \\text{{{x}}}")
+            lines.append(f"{w} \\times \\text{{{x}(s)}}")
+            lines_scale.append(f"{w} \\times {{{x_scale}}}")
 
         y = self.koges.y[0]
         y = name_map.get(y, y)
         line = "".join(lines)
+        lines_scale = "".join(lines_scale)
         if self.koges.type == "continuous":
-            equation = f""" y({y}) = {b} {line}"""
+            equation = f"y({y}) = {b} {line}"
+            equation_scale = f"y({y}) = {b} {lines_scale}"
         else:
             equation = f"X = {b} {line}\n"
+            equation_scale = f"X = {b} {lines_scale}\n"
             equation += f"P(abnormal, {y}) = P(y=1) = \\frac{{1}}{{1 + e^{{-X}}}}"
-        if isdisplay:
+        if display_unscaled:
             display(Math(equation))
+        if display_scaled:
+            display(Math(equation_scale))
         self.koges.SAVE["equation"] = equation
+        self.koges.SAVE["equationScale"] = equation_scale
